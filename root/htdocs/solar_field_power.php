@@ -18,8 +18,8 @@
                 <label for="panelAzimuth">Panel Azimuth:</label>
                 <input type="number" name="panelAzimuth[]" step="0.1" required>
                 <br>
-                <label for="peakPower">Peak Power (Wh):</label>
-                <input type="number" name="peakPower[]" step="0.1" required>
+                <label for="peakPower">Peak Power (kWh):</label>
+                <input type="number" name="peakPower[]" step="0.01" required>
                 <br>
                 <label for="panelEfficiency">Panel Efficiency:</label>
                 <input type="number" name="panelEfficiency[]" step="0.01" required value="1.00">
@@ -63,8 +63,8 @@
                     <label for='panelAzimuth'>Panel Azimuth:</label>
                     <input type='number' name='panelAzimuth[]' step='0.1' required value='$panelAzimuthValue'>
                     <br>
-                    <label for='peakPower'>Peak Power (Wh):</label>
-                    <input type='number' name='peakPower[]' step='0.1' required value='$peakPowerValue'>
+                    <label for='peakPower'>Peak Power (kWh):</label>
+                    <input type='number' name='peakPower[]' step='0.01' required value='$peakPowerValue'>
                     <br>
                     <label for='panelEfficiency'>Panel Efficiency:</label>
                     <input type='number' name='panelEfficiency[]' step='0.01' required value='$panelEfficiencyValue'>
@@ -80,8 +80,8 @@
                 <label for='panelAzimuth'>Panel Azimuth:</label>
                 <input type='number' name='panelAzimuth[]' step='0.1' required>
                 <br>
-                <label for='peakPower'>Peak Power (Wh):</label>
-                <input type='number' name='peakPower[]' step='0.1' required>
+                <label for='peakPower'>Peak Power (kWh):</label>
+                <input type='number' name='peakPower[]' step='0.01' required>
                 <br>
                 <label for='panelEfficiency'>Panel Efficiency:</label>
                 <input type='number' name='panelEfficiency[]' step='0.01' required value='1.00'>
@@ -101,6 +101,7 @@ include_once '../SolarPower.php';
 $solarField = new SolarFieldPower();
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+
     // Read the values from the form submission
     $longitude = floatval($_POST['longitude']);
     $latitude = floatval($_POST['latitude']);
@@ -122,7 +123,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         echo "Tilt angle: " . htmlspecialchars($tiltAngle) . " degrees<br>";
         echo "Panel Azimuth: " . htmlspecialchars($panelAzimuth) . " degrees<br>";
-        echo "Peak Power: " . htmlspecialchars($peakPower) . " Wh<br>";
+        echo "Peak Power: " . htmlspecialchars($peakPower) . " kWh<br>";
         echo "Panel Efficiency: " . htmlspecialchars($panelEfficiency) . "<br><br>";
 
         $solarField->AddPanel($tiltAngle, $panelAzimuth, $peakPower);
@@ -150,6 +151,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             
             // Calculate the power for the current date
             $power = $solarField->CalculatePowerDate($date);
+            // echo "Power for " . $date . " : " . intval($power) . " kWh<br>"; 
             $monthlyPower += $power;
         }
 
@@ -157,8 +159,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $monthlyPowers[] = intval($monthlyPower);
 
         // Output the summary for the current month
-        echo "Total Power for " . date("F", mktime(0, 0, 0, $month, 10)) . " " . $year . ": " . intval($monthlyPower) . " Wh<br>";
+        echo "Total Power for " . date("F", mktime(0, 0, 0, $month, 10)) . " " . $year . ": " . intval($monthlyPower) . " kWh<br>";
     }
+    echo "Total Power for year : " . array_sum($monthlyPowers) . " kWh<br>";
+
 }
 ?>
 
@@ -174,7 +178,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         data: {
             labels: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
             datasets: [{
-                label: 'Monthly Power (Wh)',
+                label: 'Monthly Power (kWh)',
                 data: monthlyPowers,
                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
                 borderColor: 'rgba(75, 192, 192, 1)',

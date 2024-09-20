@@ -22,14 +22,13 @@ class SolarFieldPower {
     
         // Ensure the date is in the correct format
         $date = new DateTime($date);
-    
         // Loop through each hour from 00:00 to 23:00
         for ($hour = 0; $hour < 24; $hour++) {
             // Clone the date object to avoid modifying the original date
             $currentHour = clone $date;
             $currentHour->setTime($hour, 0, 0);
 
-            $powerSummary += CalculatePowerDatetime($currentHour);
+            $powerSummary += $this->CalculatePowerDatetime($currentHour);
         }
     
         return $powerSummary; // Add this line to return the power summary
