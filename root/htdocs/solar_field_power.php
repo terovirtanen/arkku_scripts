@@ -126,7 +126,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         echo "Peak Power: " . htmlspecialchars($peakPower) . " kWh<br>";
         echo "Panel Efficiency: " . htmlspecialchars($panelEfficiency) . "<br><br>";
 
-        $solarField->AddPanel($tiltAngle, $panelAzimuth, $peakPower);
+        $solarField->AddPanel($tiltAngle, $panelAzimuth, $peakPower, $panelEfficiency);
 
     }
 

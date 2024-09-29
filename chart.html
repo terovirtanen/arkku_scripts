@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Output Throughout the Day</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0"></script>
+</head>
+<body>
+    <h1>Power Output Throughout the Day</h1>
+    <canvas id="powerChart" width="800" height="400"></canvas>
+    <script>
+        Promise.all([
+            fetch('power_output_midsummer.json').then(response => response.json()),
+            fetch('power_output_midsummer_ref.json').then(response => response.json()),
+            fetch('power_output_autumn.json').then(response => response.json()),
+            fetch('power_output_autumn_ref.json').then(response => response.json())
+        ]).then(([midsummerData, midsummerRefData, autumnData, autumnRefData]) => {
+            const ctx = document.getElementById('powerChart').getContext('2d');
+            const powerChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                    {
+                        label: 'Power Midsummer (kW)',
+                        data: midsummerData.times.map((time, index) => ({
+                            x: moment(time, 'HH:mm').toISOString(),
+                            y: midsummerData.powers[index]
+                        })),
+                        borderColor: 'rgba(75, 192, 192, 1)', // Custom color for Power Midsummer
+                        borderWidth: 1,
+                        fill: false
+                    },
+                    {
+                        label: 'Reference Power Midsummer (kW)',
+                        data: midsummerRefData.times.map((time, index) => ({
+                            x: moment(time, 'HH:mm').toISOString(),
+                            y: midsummerRefData.powers[index]
+                        })),
+                        borderColor: 'rgba(192, 75, 75, 1)', // Custom color for Reference Power Midsummer
+                        borderWidth: 1,
+                        fill: false
+                    },
+                    {
+                        label: 'Power Autumn (kW)',
+                        data: autumnData.times.map((time, index) => ({
+                            x: moment(time, 'HH:mm').toISOString(),
+                            y: autumnData.powers[index]
+                        })),
+                        borderColor: 'rgba(75, 75, 192, 1)', // Custom color for Power Autumn
+                        borderWidth: 1,
+                        fill: false
+                    },
+                    {
+                        label: 'Reference Power Autumn (kW)',
+                        data: autumnRefData.times.map((time, index) => ({
+                            x: moment(time, 'HH:mm').toISOString(),
+                            y: autumnRefData.powers[index]
+                        })),
+                        borderColor: 'rgba(192, 192, 75, 1)', // Custom color for Reference Power Autumn
+                        borderWidth: 1,
+                        fill: false
+                    }
+                    ]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'hour',
+                                tooltipFormat: 'HH:mm',
+                                displayFormats: {
+                                    hour: 'HH:mm'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Power (kW)'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

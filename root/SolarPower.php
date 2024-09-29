@@ -1,7 +1,7 @@
 <?php
 class SolarFieldPower {
-    public $latitude; 
-    public $longitude;
+    private $latitude; 
+    private $longitude;
     
     private $panels = array();
 
@@ -12,8 +12,8 @@ class SolarFieldPower {
         SolarPower::Initialize($this->$latitude, $this->$longitude);
     }
     
-    public function AddPanel($panelTilt, $panelAzimuth, $peakPower) {
-        $this->panels[] = new SolarPanel($panelTilt, $panelAzimuth, $peakPower);        
+    public function AddPanel($panelTilt, $panelAzimuth, $peakPower, $panelEfficiency) {
+        $this->panels[] = new SolarPanel($panelTilt, $panelAzimuth, $peakPower, $panelEfficiency);        
     }
 
     // summary on date
@@ -45,21 +45,36 @@ class SolarFieldPower {
         return $powerSummary;
        
     }
+
+    // for testing
+    public function getPanels() {
+        return $this->panels;
+    }
+    // for testing
+    public function getLatitude() {
+        return SolarPower::$latitude;
+    }
+    // for testing
+    public function getLongitude() {
+        return SolarPower::$longitude;
+    }
 }
 
 class SolarPanel {
     public $panelTilt;
     public $panelAzimuth;
     public $peakPower;
+    public $panelEfficiency;
 
-    function __construct($panelTilt, $panelAzimuth, $peakPower) {
+    function __construct($panelTilt, $panelAzimuth, $peakPower, $panelEfficiency) {
         $this->panelTilt = $panelTilt;
         $this->panelAzimuth = $panelAzimuth;
         $this->peakPower = $peakPower;
+        $this->panelEfficiency = $panelEfficiency;
     }
 
     function Power($datetime, $debug = false) {
-        return SolarPower::CalculateSolarPower($datetime, $this->panelTilt, $this->panelAzimuth, $this->peakPower, $debug);
+        return SolarPower::CalculateSolarPower($datetime, $this->panelTilt, $this->panelAzimuth, $this->peakPower, $this->panelEfficiency, $debug);
     }
 
 }
@@ -71,7 +86,7 @@ class SolarPower {
 
     // public $panelTilt; // panel tilt 1:2,5
     // public $peakPower; = 8100; // Peak power of the panel in watts
-    public static $panelEfficiency = 1.00; // Assume the panel efficiency is 100%
+    // public static $panelEfficiency;// = 1.00; // Assume the panel efficiency is 100%
 
 
     // $power = calculateSolarPowerSummary($time, $debug);
@@ -97,7 +112,8 @@ class SolarPower {
     //     return $totalPower;
     // }
 
-    public static function CalculateSolarPower($date, $panelTilt, $panelAzimuth, $peakPower, $debug = false) {
+    public static function CalculateSolarPower($date, $panelTilt, $panelAzimuth, $peakPower, $panelEfficiency, $debug = false) {
+
         $sunPosition = self::getSunPosition(self::$latitude, self::$longitude, $date, $debug); // date is UTC time
 
         $incidentAngle = self::calculateIncidentAngle($sunPosition['altitude'], $panelTilt, $panelAzimuth, $sunPosition['azimuth'], $debug);
@@ -106,18 +122,19 @@ class SolarPower {
         $sin = sin(deg2rad($incidentAngle));
         if ($debug) {
             echo "  incidentAngle: " . number_format($incidentAngle, 2) . "°\n";
+            echo "  cos: " . number_format($cos, 2) . "\n";
         }
 
         // Adjustments based on incident angle
-        $fix = 1.00;
-        if ($incidentAngle < 35) { $fix = 0.80; }
-        if ($incidentAngle < 25) { $fix = 0.60; }
-        if ($incidentAngle > 60) { $fix = 0.92; }
-        if ($incidentAngle > 70) { $fix = 0.85; }
+        $fix = 1 - abs(($incidentAngle - 45))/200;
 
         $maxIncidentAngle = self::$latitude;
         $fixFactory = 1 / (1 - cos(deg2rad($maxIncidentAngle)));
-        $power = $incidentAngle < 1 ? 0 : $peakPower * $fix * self::$panelEfficiency * $fixFactory * (1 - cos(deg2rad($incidentAngle)));
+        // $fixFactory = 1;
+        $power = $incidentAngle < 1 ? 0 : $peakPower * $fix * $panelEfficiency * $fixFactory * (1 - cos(deg2rad($incidentAngle)));
+
+        $alti_fix = $sunPosition['altitude']> 10 ? 1 : ($sunPosition['altitude']/10);
+        $power = $power * $alti_fix;
 
         if ($debug) {
             echo "  power: " . number_format($power, 2) . " W\n";
@@ -126,6 +143,8 @@ class SolarPower {
         return $power > 0 ? $power : 0;
     }
 
+    // panelTilt = 0 -> vaakataso
+    // panelTilt = 90 -> pystyssä
     private static function calculateIncidentAngle($sunAltitude, $panelTilt, $panelAzimuth, $sunAzimuth, $debug = false) {
         $azMin = -90 + $panelAzimuth;
         $azMax = 90 + $panelAzimuth;
@@ -138,14 +157,18 @@ class SolarPower {
         }
 
         // Incident angle
-        $tiltAngle = ($AzimuthDirection * $panelTilt) + $sunAltitude;
+        $incidentAngle = ($AzimuthDirection * $panelTilt) + $sunAltitude;
+
 
         // If the panel's incident angle is negative, it does not produce energy
-        if ($tiltAngle < 0) {
+        if ($incidentAngle < 0) {
             return 0;
         }
+        if ($incidentAngle > 90) {
+            return 180 - $incidentAngle;
+        }
 
-        return $tiltAngle;
+        return $incidentAngle;
     }
 
     private static function getSunPosition($latitude, $longitude, $date, $debug = false) {
@@ -157,7 +180,7 @@ class SolarPower {
             echo "Date: " . $date->format('Y-m-d H:i:s') . "\n";
             echo "  Azimuth: " . $sunPosition['azimuth'] . "°\n";
             echo "  Azimuth: " . number_format($azimuth, 2) . "°\n";
-            echo "  Altitude: " . number_format($altitude, 2) . "°\n";
+            echo "  Altitude (korkeus): " . number_format($altitude, 2) . "°\n";
         }
 
         return ['azimuth' => $azimuth, 'altitude' => $altitude];
