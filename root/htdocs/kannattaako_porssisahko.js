@@ -237,7 +237,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: 'Keskihinta (c/kWh)',
                         data: averagePrices,
-                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
                         borderWidth: 1,
                         fill: false
                     },
@@ -268,6 +269,25 @@ document.addEventListener('DOMContentLoaded', () => {
                             text: 'Keskihinta (c/kWh)'
                         }
                     }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: 'black'
+                        }
+                    }
+                },
+                layout: {
+                    backgroundColor: 'white'
+                },
+                elements: {
+                    line: {
+                        borderWidth: 3,
+                        tension: 0.4
+                    },
+                    point: {
+                        radius: 0
+                    }
                 }
             }
         });
@@ -297,7 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         label: 'Keskihinta (c/kWh)',
                         data: averagePrices,
-                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
                         borderWidth: 1,
                         fill: false
                     },
@@ -327,6 +348,25 @@ document.addEventListener('DOMContentLoaded', () => {
                             display: true,
                             text: 'Keskihinta (c/kWh)'
                         }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: 'black'
+                        }
+                    }
+                },
+                layout: {
+                    backgroundColor: 'white'
+                },
+                elements: {
+                    line: {
+                        borderWidth: 3,
+                        tension: 0.4
+                    },
+                    point: {
+                        radius: 0
                     }
                 }
             }
