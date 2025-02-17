@@ -18,7 +18,8 @@
         <p>Paljonko olisi sähköenergia maksanut menneinä vuosina pörssisähköä käyttäen kulutuskäyttäytymiselläni?<br>
         Sen voi laskea alla olevalla laskurilla.</p>
         <h2>Tee näin</h2>
-        <p>Anna energian kulutus taulukko ja laske olisiko pörssisähkö kannattanut menneenä aikana.<br>
+        <p>Anna energian kulutus taulukko ja laske olisiko pörssisähkö kannattanut menneenä aikana. 
+        Taulukon saa ladattua esimerkiksi Carunan verkkopalvelusta. Katso tarkemmin tiedoston ohjeista.<br>
         Tiedot lasketaan kuukausi- ja vuosikohtaisesti ja tulokset esitetään taulukkona ja kaaviona.</p>
         <br>
 
