@@ -46,7 +46,7 @@
                     .xlsx :<br>
                     &nbsp;&nbsp;Taulukosta luetaan sarakkeet 'Ajankohta' ja 'Laskutettava kulutus (kWh)'. <br>
                     .csv :<br>
-                    &nbsp;Tiedostossa tulee olla kaksi saraketta, päivämäärä ja kulutus kWh. Sarakkeet erotetaan puolipisteellä ja rivit rivinvaihdolla. Otsikkoriviä ei saa olla.<br>
+                    &nbsp;Tiedostossa tulee olla kaksi saraketta, päivämäärä ja kulutus kWh. Sarakkeet erotetaan puolipisteellä ja rivit rivinvaihdolla. Otsikkoriviä ei saa olla. Päivämäärä täytyy olla esimerkin mukaisessa muodossa.<br>
                     &nbsp;&nbsp;Esimerkkirivejä:<br>
                     &nbsp;&nbsp;&nbsp;&nbsp;1.1.2024 01:00;1,05<br>
                     &nbsp;&nbsp;&nbsp;&nbsp;30.12.2024 00:00;0,4<br>
@@ -93,8 +93,10 @@
                     const infoBox = icon.nextElementSibling;
                     infoBox.style.display = 'block';
                 });
+            });
+            document.querySelectorAll('.info-box').forEach(function(icon) {
                 icon.addEventListener('mouseout', function() {
-                    const infoBox = icon.nextElementSibling;
+                    const infoBox = icon.parentElement.querySelector('.info-box');
                     infoBox.style.display = 'none';
                 });
             });
