@@ -29,11 +29,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Combine energyData and priceData based on date
         const combinedData = combineData(energyData, priceData);
+        const dataOptimized = optimizedData(combinedData);
 
-        generateMonthlyTable(combinedData, priceMargin);
-        generateYearlyTable(combinedData, priceMargin);
+        generateMonthlyTable(combinedData, dataOptimized, priceMargin, priceFixed);
+        generateYearlyTable(combinedData, dataOptimized, priceMargin, priceFixed);
         monthlyChart = generateAveragePriceChart(combinedData, ctxMonthly, priceMargin, priceFixed);
         yearlyChart = generateAverageYearlyPriceChart(combinedData, ctxYearly, priceMargin, priceFixed);
+
     });
 
     async function fetchEnergyData(file) {
@@ -152,12 +154,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return combinedData;
     }
 
-    function generateMonthlyTable(data, priceMargin) {
+    function generateMonthlyTable(data, dataOptimized, priceMargin, priceFixed) {
         const monthlyTable = document.getElementById('monthlyTable');
         monthlyTable.innerHTML = '';
 
         const headerRow = document.createElement('tr');
-        headerRow.innerHTML = '<th>Kuukausi</th><th>Keskihinta (c/kWh)</th><th>Kulutettu energia (kWh)</th><th>Hinta pörssisähköllä (€)</th>';
+        headerRow.innerHTML = '<th>Kuukausi</th><th>Keskihinta (c/kWh)</th><th>Kulutettu energia (kWh)</th><th>Hinta pörssisähköllä (€)</th><th>Hinta optimoituna (€)</th><th>Kiinteähinta (€)</th>';
         monthlyTable.appendChild(headerRow);
 
         const monthlyData = data.reduce((acc, entry) => {
@@ -165,11 +167,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const year = entry.date.getFullYear();
             const key = `${year}-${month}`;
             if (!acc[key]) {
-                acc[key] = { date: new Date(year, month), price: 0, energy: 0, totalCost: 0, count: 0 };
+                acc[key] = { date: new Date(year, month), price: 0, energy: 0, totalCost: 0, totalCostOpt: 0, totalCostFixed: 0, count: 0 };
             }
             acc[key].price += ((entry.price || 0) + priceMargin);
             acc[key].energy += entry.energy || 0;
             acc[key].totalCost += ((entry.price || 0) + priceMargin) * (entry.energy || 0);
+            entryOpt = dataOptimized.find(optEntry => optEntry.date.getTime() === entry.date.getTime());
+            acc[key].totalCostOpt += ((entryOpt.price || 0) + priceMargin) * (entryOpt.energy || 0);
+            acc[key].totalCostFixed += priceFixed * (entry.energy || 0);
             acc[key].count += 1;
             return acc;
         }, {});
@@ -179,27 +184,32 @@ document.addEventListener('DOMContentLoaded', () => {
             row.innerHTML = `<td>${entry.date.toLocaleDateString('fi-FI', { year: 'numeric', month: 'long' })}</td>
                              <td>${(entry.price / entry.count).toFixed(2)}</td>
                              <td>${entry.energy.toFixed(2)}</td>
-                             <td>${(entry.totalCost / 100).toFixed(2)}</td>`;
+                             <td>${(entry.totalCost / 100).toFixed(2)}</td>
+                             <td>${(entry.totalCostOpt / 100).toFixed(2)}</td>
+                             <td>${(entry.totalCostFixed / 100).toFixed(2)}</td>`;
             monthlyTable.appendChild(row);
         });
     }
 
-    function generateYearlyTable(data, priceMargin) {
+    function generateYearlyTable(data, dataOptimized, priceMargin, priceFixed) {
         const yearlyTable = document.getElementById('yearlyTable');
         yearlyTable.innerHTML = '';
 
         const headerRow = document.createElement('tr');
-        headerRow.innerHTML = '<th>Vuosi</th><th>Keskihinta (c/kWh)</th><th>Kulutettu energia (kWh)</th><th>Hinta pörssisähköllä (€)</th>';
+        headerRow.innerHTML = '<th>Vuosi</th><th>Keskihinta (c/kWh)</th><th>Kulutettu energia (kWh)</th><th>Hinta pörssisähköllä (€)</th><th>Hinta optimoituna (€)</th><th>Kiinteähinta (€)</th>';
         yearlyTable.appendChild(headerRow);
 
         const yearlyData = data.reduce((acc, entry) => {
             const year = entry.date.getFullYear();
             if (!acc[year]) {
-                acc[year] = { date: new Date(year, 0), price: 0, energy: 0, totalCost: 0, count: 0 };
+                acc[year] = { date: new Date(year, 0), price: 0, energy: 0, totalCost: 0, totalCostOpt: 0, totalCostFixed: 0, count: 0 };
             }
             acc[year].price += (entry.price || 0) + priceMargin;
             acc[year].energy += entry.energy || 0;
             acc[year].totalCost += ((entry.price || 0) + priceMargin) * (entry.energy || 0);
+            entryOpt = dataOptimized.find(optEntry => optEntry.date.getTime() === entry.date.getTime());
+            acc[year].totalCostOpt += ((entryOpt.price || 0) + priceMargin) * (entryOpt.energy || 0);
+            acc[year].totalCostFixed += priceFixed * (entry.energy || 0);
             acc[year].count += 1;
             return acc;
         }, {});
@@ -209,11 +219,41 @@ document.addEventListener('DOMContentLoaded', () => {
             row.innerHTML = `<td>${entry.date.getFullYear()}</td>
                              <td>${(entry.price / entry.count).toFixed(2)}</td>
                              <td>${entry.energy.toFixed(2)}</td>
-                             <td>${(entry.totalCost / 100).toFixed(2)}</td>`;
+                             <td>${(entry.totalCost / 100).toFixed(2)}</td>
+                             <td>${(entry.totalCostOpt / 100).toFixed(2)}</td>
+                             <td>${(entry.totalCostFixed / 100).toFixed(2)}</td>`;
             yearlyTable.appendChild(row);
         });
     }
 
+    function optimizedData(data) {
+        let optimizedData = [];
+    
+        // Group data by day
+        const groupedData = data.reduce((acc, entry) => {
+            const dateKey = new Date(entry.date.getTime() - entry.date.getTimezoneOffset() * 60000).toISOString().split('T')[0]; // Get date part only in Finnish time
+            if (!acc[dateKey]) {
+                acc[dateKey] = [];
+            }
+            acc[dateKey].push(entry);
+            return acc;
+        }, {});
+        // Process each day's data
+        Object.values(groupedData).forEach(dayData => {
+            // Sort by price ascending
+            const sortedByPrice = [...dayData].sort((a, b) => a.price - b.price);
+            // Sort by energy descending
+            const sortedByEnergy = [...dayData].sort((a, b) => b.energy - a.energy);
+            // Swap prices and energies
+            const optimizedDayData = sortedByPrice.map((entry, index) => ({
+                ...entry,
+                energy: sortedByEnergy[index].energy
+            }));
+    
+            optimizedData = optimizedData.concat(optimizedDayData);
+        });
+        return optimizedData;
+    }
 
     function generateAverageYearlyPriceChart(data, ctx, priceMargin, priceFixed) {
         const yearlyData = data.reduce((acc, entry) => {
@@ -372,4 +412,5 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
 });

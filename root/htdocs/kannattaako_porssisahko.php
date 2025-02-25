@@ -74,15 +74,17 @@
                 <input type="number" id="priceFixed" value="9.9" style="width: 60px;">
                 <div class="info-icon">?</div>
                 <div class="info-box">
-                <p>Kiinteä hinta käytetään vertaamaan kiinteähintaista sopimusta pörssisähköön. Kiinteästä hinnasta piirretään viiva taulukkoon, sitä ei käytetä laskennassa.</p>
+                <p>Kiinteä hinta käytetään vertaamaan kiinteähintaista sopimusta pörssisähköön. Kiinteästä hinnasta piirretään viiva taulukkoon ja vertailuarvona taulukossa.</p>
                 </div>
             </div>
             <button type="button" id="generateButton">Laske</button>
         </form>
         <h2>Kuukausi kulutus ja hinta pörssisähköllä</h2>
+        <p>Optimoitu hinta on laskettu päivän suurin kulutus olisi käytetty päivän halvimpana tuntina ja vastaavasti pienin kulutus kalleinpana tuntina.</p>
         <table id="monthlyTable"></table>
         <canvas id="monthlyChart"></canvas>
         <h2>Vuosi kulutus ja hinta pörssisähköllä</h2>
+        <p>Optimoitu hinta on laskettu päivän suurin kulutus olisi käytetty päivän halvimpana tuntina ja vastaavasti pienin kulutus kalleinpana tuntina.</p>
         <table id="yearlyTable"></table>
         <canvas id="yearlyChart"></canvas>
     </main>
