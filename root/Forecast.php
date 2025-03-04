@@ -25,7 +25,8 @@ class Forecast {
         $this->solarField->AddPanel(Panels::$panelTilt1, Panels::$panelAzimuth1, Panels::$peakPower1);
         $this->solarField->AddPanel(Panels::$panelTilt2, Panels::$panelAzimuth2, Panels::$peakPower2);
 
-        $xmlRaw = file_get_contents('https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=' . Panels::$place . '&parameters=middleandlowcloudcover&');
+        // $xmlRaw = file_get_contents('https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=' . Panels::$place . '&parameters=middleandlowcloudcover&');
+        $xmlRaw = file_get_contents('https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=' . Panels::$place . '&parameters=lowcloudcover&');
         $this->responsePosition($xmlRaw);
         $this->solarField->SetLocation($this->latitude, $this->longitude);
         
