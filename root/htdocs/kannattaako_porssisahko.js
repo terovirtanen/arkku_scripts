@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         monthlyTable.innerHTML = '';
 
         const headerRow = document.createElement('tr');
-        headerRow.innerHTML = '<th>Kuukausi</th><th>Keskihinta (c/kWh)</th><th>Kulutettu energia (kWh)</th><th>Hinta pörssisähköllä (€)</th><th>Hinta optimoituna (€)</th><th>Kiinteähinta (€)</th>';
+        headerRow.innerHTML = '<th>Kuukausi</th><th>Kulutettu energia (kWh)</th><th>Keskihinta pörssisähköllä (c/kWh)</th><th>Hinta pörssisähköllä (€)</th><th>Hinta optimoituna (€)</th><th>Kiinteähinta (€)</th>';
         monthlyTable.appendChild(headerRow);
 
         const monthlyData = data.reduce((acc, entry) => {
@@ -167,23 +167,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const year = entry.date.getFullYear();
             const key = `${year}-${month}`;
             if (!acc[key]) {
-                acc[key] = { date: new Date(year, month), price: 0, energy: 0, totalCost: 0, totalCostOpt: 0, totalCostFixed: 0, count: 0 };
+                acc[key] = { date: new Date(year, month), energy: 0, totalCost: 0, totalCostOpt: 0, totalCostFixed: 0 };
             }
-            acc[key].price += ((entry.price || 0) + priceMargin);
             acc[key].energy += entry.energy || 0;
             acc[key].totalCost += ((entry.price || 0) + priceMargin) * (entry.energy || 0);
             entryOpt = dataOptimized.find(optEntry => optEntry.date.getTime() === entry.date.getTime());
             acc[key].totalCostOpt += ((entryOpt.price || 0) + priceMargin) * (entryOpt.energy || 0);
             acc[key].totalCostFixed += priceFixed * (entry.energy || 0);
-            acc[key].count += 1;
             return acc;
         }, {});
 
         Object.values(monthlyData).forEach(entry => {
             const row = document.createElement('tr');
             row.innerHTML = `<td>${entry.date.toLocaleDateString('fi-FI', { year: 'numeric', month: 'long' })}</td>
-                             <td>${(entry.price / entry.count).toFixed(2)}</td>
                              <td>${entry.energy.toFixed(2)}</td>
+                             <td>${(entry.totalCost / entry.energy ).toFixed(2)}</td>
                              <td>${(entry.totalCost / 100).toFixed(2)}</td>
                              <td>${(entry.totalCostOpt / 100).toFixed(2)}</td>
                              <td>${(entry.totalCostFixed / 100).toFixed(2)}</td>`;
@@ -196,29 +194,27 @@ document.addEventListener('DOMContentLoaded', () => {
         yearlyTable.innerHTML = '';
 
         const headerRow = document.createElement('tr');
-        headerRow.innerHTML = '<th>Vuosi</th><th>Keskihinta (c/kWh)</th><th>Kulutettu energia (kWh)</th><th>Hinta pörssisähköllä (€)</th><th>Hinta optimoituna (€)</th><th>Kiinteähinta (€)</th>';
+        headerRow.innerHTML = '<th>Vuosi</th><th>Kulutettu energia (kWh)</th><th>Keskihinta pörssisähköllä (c/kWh)</th><th>Hinta pörssisähköllä (€)</th><th>Hinta optimoituna (€)</th><th>Kiinteähinta (€)</th>';
         yearlyTable.appendChild(headerRow);
 
         const yearlyData = data.reduce((acc, entry) => {
             const year = entry.date.getFullYear();
             if (!acc[year]) {
-                acc[year] = { date: new Date(year, 0), price: 0, energy: 0, totalCost: 0, totalCostOpt: 0, totalCostFixed: 0, count: 0 };
+                acc[year] = { date: new Date(year, 0), energy: 0, totalCost: 0, totalCostOpt: 0, totalCostFixed: 0 };
             }
-            acc[year].price += (entry.price || 0) + priceMargin;
             acc[year].energy += entry.energy || 0;
             acc[year].totalCost += ((entry.price || 0) + priceMargin) * (entry.energy || 0);
             entryOpt = dataOptimized.find(optEntry => optEntry.date.getTime() === entry.date.getTime());
             acc[year].totalCostOpt += ((entryOpt.price || 0) + priceMargin) * (entryOpt.energy || 0);
             acc[year].totalCostFixed += priceFixed * (entry.energy || 0);
-            acc[year].count += 1;
             return acc;
         }, {});
 
         Object.values(yearlyData).forEach(entry => {
             const row = document.createElement('tr');
             row.innerHTML = `<td>${entry.date.getFullYear()}</td>
-                             <td>${(entry.price / entry.count).toFixed(2)}</td>
                              <td>${entry.energy.toFixed(2)}</td>
+                             <td>${(entry.totalCost / entry.energy ).toFixed(2)}</td>
                              <td>${(entry.totalCost / 100).toFixed(2)}</td>
                              <td>${(entry.totalCostOpt / 100).toFixed(2)}</td>
                              <td>${(entry.totalCostFixed / 100).toFixed(2)}</td>`;
@@ -259,15 +255,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const yearlyData = data.reduce((acc, entry) => {
             const year = entry.date.getFullYear();
             if (!acc[year]) {
-                acc[year] = { date: new Date(year, 0), price: 0, count: 0 };
+                acc[year] = { date: new Date(year, 0), energy: 0, totalCost: 0 };
             }
-            acc[year].price += ((entry.price || 0) + priceMargin);
-            acc[year].count += 1;
+            acc[year].energy += entry.energy || 0;
+            acc[year].totalCost += ((entry.price || 0) + priceMargin) * (entry.energy || 0);
+
             return acc;
         }, {});
 
         const labels = Object.values(yearlyData).map(entry => entry.date.getFullYear());
-        const averagePrices = Object.values(yearlyData).map(entry => (entry.price / entry.count).toFixed(2));
+        const averagePrices = Object.values(yearlyData).map(entry => (entry.totalCost / entry.energy).toFixed(2));
 
         return new Chart(ctx, {
             type: 'bar',
@@ -339,15 +336,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const year = entry.date.getFullYear();
             const key = `${year}-${month}`;
             if (!acc[key]) {
-                acc[key] = { date: new Date(year, month), price: 0, count: 0 };
+                acc[key] = { date: new Date(year, month), energy: 0, totalCost: 0  };
             }
-            acc[key].price += (entry.price || 0) + priceMargin;
-            acc[key].count += 1;
+            acc[key].energy += entry.energy || 0;
+            acc[key].totalCost += ((entry.price || 0) + priceMargin) * (entry.energy || 0);
+
             return acc;
         }, {});
 
         const labels = Object.values(monthlyData).map(entry => entry.date.toLocaleDateString('fi-FI', { year: 'numeric', month: 'long' }));
-        const averagePrices = Object.values(monthlyData).map(entry => (entry.price / entry.count).toFixed(2));
+        const averagePrices = Object.values(monthlyData).map(entry => (entry.totalCost / entry.energy).toFixed(2));
 
         return new Chart(ctx, {
             type: 'bar',

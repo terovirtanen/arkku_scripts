@@ -80,11 +80,11 @@
             <button type="button" id="generateButton">Laske</button>
         </form>
         <h2>Kuukausi kulutus ja hinta pörssisähköllä</h2>
-        <p>Optimoitu hinta on laskettu päivän suurin kulutus olisi käytetty päivän halvimpana tuntina ja vastaavasti pienin kulutus kalleinpana tuntina.</p>
+        <p>Optimoitu hinta on laskettu päivän suurin kulutus olisi käytetty päivän halvimpana tuntina, toiseksi suurin toiseksi halvimpana jne kunnes pienin kulutus kalleimpana tuntina.</p>
         <table id="monthlyTable"></table>
         <canvas id="monthlyChart"></canvas>
         <h2>Vuosi kulutus ja hinta pörssisähköllä</h2>
-        <p>Optimoitu hinta on laskettu päivän suurin kulutus olisi käytetty päivän halvimpana tuntina ja vastaavasti pienin kulutus kalleinpana tuntina.</p>
+        <p>Optimoitu hinta on laskettu päivän suurin kulutus olisi käytetty päivän halvimpana tuntina, toiseksi suurin toiseksi halvimpana jne kunnes pienin kulutus kalleimpana tuntina.</p>
         <table id="yearlyTable"></table>
         <canvas id="yearlyChart"></canvas>
     </main>
