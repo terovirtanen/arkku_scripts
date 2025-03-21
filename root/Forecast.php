@@ -11,6 +11,8 @@ class Panels {
     public static $panelTilt2 = 22; 
     public static $panelAzimuth2 = -90;
     public static $peakPower2 = 4050;
+
+    public static $panelEfficiency = 1.00;
 }
 
 class Forecast {
@@ -22,8 +24,8 @@ class Forecast {
     
     public function Initialize() {
         $this->solarField = new SolarFieldPower();
-        $this->solarField->AddPanel(Panels::$panelTilt1, Panels::$panelAzimuth1, Panels::$peakPower1);
-        $this->solarField->AddPanel(Panels::$panelTilt2, Panels::$panelAzimuth2, Panels::$peakPower2);
+        $this->solarField->AddPanel(Panels::$panelTilt1, Panels::$panelAzimuth1, Panels::$peakPower1, Panels::$panelEfficiency);
+        $this->solarField->AddPanel(Panels::$panelTilt2, Panels::$panelAzimuth2, Panels::$peakPower2, Panels::$panelEfficiency);
 
         // $xmlRaw = file_get_contents('https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=' . Panels::$place . '&parameters=middleandlowcloudcover&');
         $xmlRaw = file_get_contents('https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=' . Panels::$place . '&parameters=lowcloudcover&');
