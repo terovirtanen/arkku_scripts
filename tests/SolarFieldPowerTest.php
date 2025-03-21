@@ -36,7 +36,7 @@ class SolarFieldPowerTest extends TestCase {
 
         $power = $solarField->CalculatePowerDate('2023-05-18');
 
-        $this->assertInternalType('numeric', $power);
+        $this->assertIsNumeric($power);
         $this->assertGreaterThan(0, $power);
     }
 
@@ -49,7 +49,7 @@ class SolarFieldPowerTest extends TestCase {
         $datetime = new DateTime('2023-05-18 12:00:00');
         $power = $solarField->CalculatePowerDatetime($datetime);
 
-        $this->assertInternalType('numeric', $power);
+        $this->assertIsNumeric($power);
         $this->assertGreaterThan(0, $power);
     }
 
@@ -61,7 +61,7 @@ class SolarFieldPowerTest extends TestCase {
         $datetime = new DateTime('2023-06-25 11:00:00');
         $power = $solarField->CalculatePowerDatetime($datetime, true);
 
-        $this->assertInternalType('numeric', $power);
+        $this->assertIsNumeric($power);
         $this->assertGreaterThan(0, $power);
     }
     public function testCalculatePowerDatetime_panel38_0() {
@@ -72,7 +72,7 @@ class SolarFieldPowerTest extends TestCase {
         $datetime = new DateTime('2023-06-25 11:00:00');
         $power = $solarField->CalculatePowerDatetime($datetime, true);
 
-        $this->assertInternalType('numeric', $power);
+        $this->assertIsNumeric($power);
         $this->assertGreaterThan(0, $power);
     }
     public function testCalculatePowerDatetime_panel22_90() {
@@ -83,7 +83,7 @@ class SolarFieldPowerTest extends TestCase {
         $datetime = new DateTime('2023-06-25 11:00:00');
         $power = $solarField->CalculatePowerDatetime($datetime, true);
 
-        $this->assertInternalType('numeric', $power);
+        $this->assertIsNumeric($power);
         $this->assertGreaterThan(0, $power);
     }
 
