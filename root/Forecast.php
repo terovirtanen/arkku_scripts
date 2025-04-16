@@ -6,11 +6,11 @@ class Panels {
 
     public static $panelTilt1 = 22; 
     public static $panelAzimuth1 = 90;
-    public static $peakPower1 = 4050;
+    public static $peakPower1 = 8200;
 
     public static $panelTilt2 = 22; 
     public static $panelAzimuth2 = -90;
-    public static $peakPower2 = 4050;
+    public static $peakPower2 = 8200;
 
     public static $panelEfficiency = 1.00;
 }
