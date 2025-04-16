@@ -83,7 +83,7 @@ class Forecast {
             $sql = "INSERT INTO forecast_fmi_daily (date, clouds, maxpower, forecastpower)
             VALUES ('$date', '$clouds', '$maxpower', '$forecastpower')
             ON DUPLICATE KEY UPDATE 
-            clouds = '$clouds', forecastpower = '$forecastpower'";
+            clouds = '$clouds', maxpower = '$maxpower', forecastpower = '$forecastpower'";
     
             if ($conn->query($sql) === TRUE) {
                 // echo "New record created successfully";
