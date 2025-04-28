@@ -1,4 +1,6 @@
 <?php
+$timezone = "Europe/Helsinki";
+
 date_default_timezone_set($timezone);
 
 $jsonRaw = file_get_contents('https://api.porssisahko.net/v1/latest-prices.json');
