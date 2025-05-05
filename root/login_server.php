@@ -38,6 +38,12 @@ if ($conn){
         // else{
         //     echo "forecast_fmi table already exists";
         // }
+        // add colunm 'weathersymbol' to forecast_fmi_daily table
+        
+        $sql_add_column = "ALTER TABLE forecast_fmi_daily ADD COLUMN IF NOT EXISTS weathersymbol INT;";
+        if (mysqli_query($conn, $sql_add_column) === TRUE) {
+            // echo "Column 'weathersymbol' added successfully";
+        }
     }
     //catch exception
     catch(Exception $e) {

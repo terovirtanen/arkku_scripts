@@ -21,20 +21,33 @@ class Forecast {
     private $longitude;
 
     private $forecastPoints = array();
+    private $baseUrl = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=';
     
     public function Initialize() {
         $this->solarField = new SolarFieldPower();
         $this->solarField->AddPanel(Panels::$panelTilt1, Panels::$panelAzimuth1, Panels::$peakPower1, Panels::$panelEfficiency);
         $this->solarField->AddPanel(Panels::$panelTilt2, Panels::$panelAzimuth2, Panels::$peakPower2, Panels::$panelEfficiency);
 
+        // curl 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=koski_tl&parameters=lowcloudcover&WeatherSymbol3&'
         // $xmlRaw = file_get_contents('https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=' . Panels::$place . '&parameters=middleandlowcloudcover&');
-        $xmlRaw = file_get_contents('https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=' . Panels::$place . '&parameters=lowcloudcover&');
+        // $xmlRaw = file_get_contents('https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=' . Panels::$place . '&parameters=lowcloudcover&');
+        // $this->responsePosition($xmlRaw);
+        // $this->solarField->SetLocation($this->latitude, $this->longitude);
+        
+        // $this->responseHandler($xmlRaw);
+        $this->getFmiData();
+    }
+
+    public function getFmiData() {
+        $xmlRaw = file_get_contents($baseUrl . Panels::$place . '&parameters=lowcloudcover&');
         $this->responsePosition($xmlRaw);
         $this->solarField->SetLocation($this->latitude, $this->longitude);
         
         $this->responseHandler($xmlRaw);
-    }
 
+        $xmlRawWeatherSymbols = file_get_contents($baseUrl . Panels::$place . '&parameters=WeatherSymbol3&');
+        $this->responseHandlerWeatherSymbols($xmlRawWeatherSymbols);
+    }
     public function SetForecastPower($debug = false) {
         foreach ($this->forecastPoints as $forecastPoint) {
             $forecastPoint->maxPower = $this->solarField->CalculatePowerDatetime($forecastPoint->datetime, $debug);
@@ -72,18 +85,20 @@ class Forecast {
         //     date DATETIME NOT NULL UNIQUE,
         //     clouds INT,
         //     maxpower INT NOT NULL,
-        //     forecastpower INT NOT NULL
+        //     forecastpower INT NOT NULL,
+        //     weathersymbol INT
         //     );";
         foreach ($this->forecastPoints as $forecastPoint) {
             $date = $forecastPoint->datetime->format('Y-m-d H:i:s');
             $clouds = $forecastPoint->cloud;
+            $weathersymbol = $forecastPoint->weatherSymbol;
             $maxpower = $forecastPoint->maxPower;
             $forecastpower = $forecastPoint->ForecastPower();
 
-            $sql = "INSERT INTO forecast_fmi_daily (date, clouds, maxpower, forecastpower)
-            VALUES ('$date', '$clouds', '$maxpower', '$forecastpower')
+            $sql = "INSERT INTO forecast_fmi_daily (date, clouds, maxpower, forecastpower, weathersymbol)
+            VALUES ('$date', '$clouds', '$maxpower', '$forecastpower', '$weathersymbol')
             ON DUPLICATE KEY UPDATE 
-            clouds = '$clouds', maxpower = '$maxpower', forecastpower = '$forecastpower'";
+            clouds = '$clouds', maxpower = '$maxpower', forecastpower = '$forecastpower', weathersymbol = '$weathersymbol'";
     
             if ($conn->query($sql) === TRUE) {
                 // echo "New record created successfully";
@@ -95,6 +110,22 @@ class Forecast {
     }
 
     public function GetDataByDate($conn, $date) {
+        // echo "Date: " . $date . "<br>"; 
+        $sql = "SELECT date, clouds, maxpower, forecastpower, weathersymbol FROM forecast_fmi_daily WHERE date LIKE '$date%'";
+        $result = $conn->query($sql);
+    
+        if ($result->num_rows > 0) {
+            $data = array();
+            while($row = $result->fetch_assoc()) {
+                $data[] = $row;
+            }
+            return $data;
+        } 
+        else {
+            return array();
+        }
+    }
+    public function GetSummaryDataByDate($conn, $date) {
         // echo "Date: " . $date . "<br>"; 
         $sql = "SELECT sum(maxpower) as totalMaxPower, sum(forecastpower) as totalForecastPower FROM forecast_fmi_daily WHERE date LIKE '$date%'";
         $result = $conn->query($sql);
@@ -162,11 +193,47 @@ class Forecast {
             }
         }
     }
+    private function responseHandlerWeatherSymbols($response, $debug = false) {
+        // Split the text into lines
+        $lines = explode("\n", $response);
+    
+        // Define the regular expressions to match
+        $regexTime = '/<wml2:time>(.*)<\/wml2:time>/';
+        $regexValue = '/<wml2:value>(.*)<\/wml2:value>/';
+    
+        // Loop through each line and process it
+        foreach ($lines as $index => $line) {
+            if (preg_match($regexTime, $line, $timeMatch)) {
+                if ($debug) echo "Time: " . $timeMatch[1] . "\n";
+    
+                // value is in the next line
+                if (isset($lines[$index + 1])) {
+                    $nextLine = $lines[$index + 1];
+                    if (preg_match($regexValue, $nextLine, $valueMatch)) {
+                        if ($debug) echo "Value: " . $valueMatch[1] . "\n";
+
+                        $symbol = floatval($valueMatch[1]);
+                        $datetime = new DateTime($timeMatch[1]);
+
+                        // Try to find an existing ForecastPoint by datetime
+                        foreach ($this->forecastPoints as $forecastPoint) {
+                            if ($forecastPoint->datetime == $datetime) {
+                                $forecastPoint->SetWeatherSymbol($symbol);
+                                break;
+                            }
+                        }
+
+                    }
+                }
+            }
+        }
+    }
 }
 
 class ForecastPoint {
     public $datetime;
     public $cloud;
+    public $weatherSymbol;
     public $maxPower;
 
     function __construct($datetime, $cloud) {
@@ -182,5 +249,42 @@ class ForecastPoint {
         if ($this->cloud > 90) $cloudFix = 10;
         return $this->maxPower * (($cloudCover + $cloudFix) / 100);
     }
+
+    public function SetWeatherSymbol($symbol) {
+        $this->weatherSymbol = $symbol;
+    }
 }
 ?>
+
+
+<!-- 
+https://www.ilmatieteenlaitos.fi/latauspalvelun-pikaohje
+WeatherSymbol3
+
+1 selkeää
+2 puolipilvistä
+21 heikkoja sadekuuroja
+22 sadekuuroja
+23 voimakkaita sadekuuroja
+3 pilvistä
+31 heikkoa vesisadetta
+32 vesisadetta
+33 voimakasta vesisadetta
+41 heikkoja lumikuuroja
+42 lumikuuroja
+43 voimakkaita lumikuuroja
+51 heikkoa lumisadetta
+52 lumisadetta
+53 voimakasta lumisadetta
+61 ukkoskuuroja
+62 voimakkaita ukkoskuuroja
+63 ukkosta
+64 voimakasta ukkosta
+71 heikkoja räntäkuuroja
+72 räntäkuuroja
+73 voimakkaita räntäkuuroja
+81 heikkoa räntäsadetta
+82 räntäsadetta
+83 voimakasta räntäsadetta
+91 utua
+92 sumua -->
