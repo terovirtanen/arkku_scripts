@@ -22,6 +22,8 @@ class Forecast {
 
     private $forecastPoints = array();
     private $baseUrl = 'https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=getFeature&storedquery_id=fmi::forecast::edited::weather::scandinavia::point::timevaluepair&place=';
+
+    private $timezone = "Europe/Helsinki";
     
     public function Initialize() {
         $this->solarField = new SolarFieldPower();
@@ -184,7 +186,9 @@ class Forecast {
                         if ($debug) echo "Value: " . $valueMatch[1] . "\n";
 
                         $cloud = floatval($valueMatch[1]);
-                        $datetime = new DateTime($timeMatch[1]);
+                        $datetime = new DateTime($timeMatch[1]); // Create DateTime in UTC
+                        // $datetime = new DateTime($timeMatch[1], new DateTimeZone('UTC')); // Create DateTime in UTC
+                        // $datetime->setTimezone(new DateTimeZone($this->timezone)); // Convert to Helsinki timezone
 
                         $this->forecastPoints[] = new ForecastPoint($datetime, $cloud);        
 
@@ -213,7 +217,9 @@ class Forecast {
                         if ($debug) echo "Value: " . $valueMatch[1] . "\n";
 
                         $symbol = floatval($valueMatch[1]);
-                        $datetime = new DateTime($timeMatch[1]);
+                        $datetime = new DateTime($timeMatch[1]); // Create DateTime in UTC
+                        // $datetime = new DateTime($timeMatch[1], new DateTimeZone('UTC')); // Create DateTime in UTC
+                        // $datetime->setTimezone(new DateTimeZone($this->timezone)); // Convert to Helsinki timezone
 
                         // Try to find an existing ForecastPoint by datetime
                         foreach ($this->forecastPoints as $forecastPoint) {
