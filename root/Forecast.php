@@ -84,7 +84,11 @@ class Forecast {
 
     public function PrintForecastpoints() {
         foreach ($this->forecastPoints as $forecastPoint) {
-            echo "Forecast Point: " . $forecastPoint->datetime->format('Y-m-d H:i:s') . " - Cloud: " . $forecastPoint->cloud . " - weatherSymbol: " . $forecastPoint->weatherSymbol ."<br>";
+            echo "Forecast Point: " . $forecastPoint->datetime->format('Y-m-d H:i:s') 
+            . " - MaxPower: " . intval($forecastPoint->maxPower)
+            . " - ForecastPower: " . intval($forecastPoint->ForecastPower())
+            . " - Cloud: " . $forecastPoint->cloud 
+            . " - weatherSymbol: " . $forecastPoint->weatherSymbol ."<br>";
         }
     }
 
@@ -193,9 +197,9 @@ class Forecast {
                         if ($debug) echo "Value: " . $valueMatch[1] . "\n";
 
                         $cloud = floatval($valueMatch[1]);
-                        $datetime = new DateTime($timeMatch[1]); // Create DateTime in UTC
-                        // $datetime = new DateTime($timeMatch[1], new DateTimeZone('UTC')); // Create DateTime in UTC
-                        // $datetime->setTimezone(new DateTimeZone($this->timezone)); // Convert to Helsinki timezone
+                        // $datetime = new DateTime($timeMatch[1]); // Create DateTime in UTC
+                        $datetime = new DateTime($timeMatch[1], new DateTimeZone('UTC')); // Create DateTime in UTC
+                        $datetime->setTimezone(new DateTimeZone($this->timezone)); // Convert to Helsinki timezone
 
                         $this->forecastPoints[] = new ForecastPoint($datetime, $cloud);        
 
@@ -224,9 +228,9 @@ class Forecast {
                         if ($debug) echo "Value: " . $valueMatch[1] . "\n";
 
                         $symbol = floatval($valueMatch[1]);
-                        $datetime = new DateTime($timeMatch[1]); // Create DateTime in UTC
-                        // $datetime = new DateTime($timeMatch[1], new DateTimeZone('UTC')); // Create DateTime in UTC
-                        // $datetime->setTimezone(new DateTimeZone($this->timezone)); // Convert to Helsinki timezone
+                        // $datetime = new DateTime($timeMatch[1]); // Create DateTime in UTC
+                        $datetime = new DateTime($timeMatch[1], new DateTimeZone('UTC')); // Create DateTime in UTC
+                        $datetime->setTimezone(new DateTimeZone($this->timezone)); // Convert to Helsinki timezone
 
                         // Try to find an existing ForecastPoint by datetime
                         foreach ($this->forecastPoints as $forecastPoint) {
