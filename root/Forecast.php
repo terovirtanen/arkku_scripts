@@ -37,19 +37,20 @@ class Forecast {
         // $this->solarField->SetLocation($this->latitude, $this->longitude);
         
         // $this->responseHandler($xmlRaw);
-        $this->getFmiData();
+        // $this->getFmiData();
     }
 
-    public function getFmiData() {
+    public function GetFmiData($debug = false) {
         $xmlRaw = file_get_contents($this->baseUrl . Panels::$place . '&parameters=lowcloudcover&');
         $this->responsePosition($xmlRaw);
         $this->solarField->SetLocation($this->latitude, $this->longitude);
         
-        $this->responseHandler($xmlRaw);
+        $this->responseHandler($xmlRaw, $debug);
 
         $xmlRawWeatherSymbols = file_get_contents($this->baseUrl . Panels::$place . '&parameters=WeatherSymbol3&');
-        $this->responseHandlerWeatherSymbols($xmlRawWeatherSymbols);
+        $this->responseHandlerWeatherSymbols($xmlRawWeatherSymbols, $debug);
     }
+
     public function SetForecastPower($debug = false) {
         foreach ($this->forecastPoints as $forecastPoint) {
             $forecastPoint->maxPower = $this->solarField->CalculatePowerDatetime($forecastPoint->datetime, $debug);
@@ -80,7 +81,13 @@ class Forecast {
             echo "Forecast Solar Power on " . $date . " is : " . number_format($power, 0) . " Wh<br>";
         }
     }
-    
+
+    public function PrintForecastpoints() {
+        foreach ($this->forecastPoints as $forecastPoint) {
+            echo "Forecast Point: " . $forecastPoint->datetime->format('Y-m-d H:i:s') . " - Cloud: " . $forecastPoint->cloud . " - weatherSymbol: " . $forecastPoint->weatherSymbol ."<br>";
+        }
+    }
+
     public function StoreData($conn) {
             // $sql_forecast_fmi_daily = "CREATE TABLE forecast_fmi_daily(
         //     id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY, 
@@ -293,4 +300,4 @@ WeatherSymbol3
 82 räntäsadetta
 83 voimakasta räntäsadetta
 91 utua
-92 sumua -->
+92 sumua  -->

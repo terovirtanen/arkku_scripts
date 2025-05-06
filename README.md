@@ -58,3 +58,7 @@ By following these steps, you should be able to run your PHPUnit tests on Ubuntu
 # show chart.html with data json
 python3 -m http.server 8000
 http://localhost:8000/chart.html
+
+# php
+run on root/htdocs cmd
+php -S 127.0.0.1:8000
