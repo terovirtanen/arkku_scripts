@@ -13,6 +13,7 @@ include_once '../Forecast.php';
 
 $forecast = new Forecast();
 $forecast->Initialize();
+$forecast->GetFmiData();
 $forecast->SetForecastPower();
 $forecast->StoreData($conn);
 
