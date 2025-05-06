@@ -39,13 +39,13 @@ class Forecast {
     }
 
     public function getFmiData() {
-        $xmlRaw = file_get_contents($baseUrl . Panels::$place . '&parameters=lowcloudcover&');
+        $xmlRaw = file_get_contents($this->baseUrl . Panels::$place . '&parameters=lowcloudcover&');
         $this->responsePosition($xmlRaw);
         $this->solarField->SetLocation($this->latitude, $this->longitude);
         
         $this->responseHandler($xmlRaw);
 
-        $xmlRawWeatherSymbols = file_get_contents($baseUrl . Panels::$place . '&parameters=WeatherSymbol3&');
+        $xmlRawWeatherSymbols = file_get_contents($this->baseUrl . Panels::$place . '&parameters=WeatherSymbol3&');
         $this->responseHandlerWeatherSymbols($xmlRawWeatherSymbols);
     }
     public function SetForecastPower($debug = false) {
