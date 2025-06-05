@@ -30,6 +30,8 @@ PrintData($forecast->GetSummaryDataByDate($conn, $tomorrow));
 // print all data for today
 PrintDayData($forecast->GetDataByDate($conn, $today));
 
+PrintDayData($forecast->GetDataByDate($conn, $tomorrow));
+
 $conn->close();
 
 function PrintDayData($data) {

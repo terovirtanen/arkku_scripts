@@ -260,11 +260,68 @@ class ForecastPoint {
     }
 
     public function ForecastPower() {
-        $cloudCover = 100 - $this->cloud;
-        $cloudFix = 0;
-        if ($this->cloud > 80) $cloudFix = 5;
-        if ($this->cloud > 90) $cloudFix = 10;
-        return $this->maxPower * (($cloudCover + $cloudFix) / 100);
+        $sun = 100;
+
+        switch($this->weatherSymbol) {
+            case 1: // selkeää
+                $sun = 100;
+                break;
+            case 2: // puolipilvistä
+                $sun = 85;
+                break;
+            case 3: // pilvistä
+                $sun = 70;
+                break;
+            case 21: // heikkoja sadekuuroja
+                $sun = 50;
+                break;
+            case 22: // sadekuuroja
+                $sun = 40;
+                break;
+            case 23: // voimakkaita sadekuuroja
+                $sun = 30;
+                break;
+            case 31: // heikkoa vesisadetta
+            case 32: // vesisadetta
+            case 33: // voimakasta vesisadetta
+                $sun = 20;
+                break;
+            case 41: // heikkoja lumikuuroja
+            case 42: // lumikuuroja
+            case 43: // voimakkaita lumikuuroja
+                $sun = 0;
+                break;
+            case 51: // heikkoa lumisadetta
+            case 52: // lumisadetta
+            case 53: // voimakasta lumisadetta
+                $sun = 0;
+                break;
+            case 61: // ukkoskuuroja
+                $sun = 40;
+                break;
+            case 62: // voimakkaita ukkoskuuroja
+            case 63: // ukkosta
+            case 64: // voimakasta ukkosta
+                $sun = 30;
+                break;
+            case 71: // heikkoja räntäkuuroja
+            case 72: // räntäkuuroja
+            case 73: // voimakkaita räntäkuuroja
+                $sun = 20;
+                break;
+            case 81: // heikkoa räntäsadetta
+            case 82: // räntäsadetta
+            case 83: // voimakasta räntäsadetta
+                $sun = 10;
+                break;
+            default:
+                $sun = 20;
+        }
+
+        $cloudFactory = ($this->cloud < 9) ? 0 : intval($this->cloud/10);
+        $sunProcent = ($sun - $cloudFactory) < 0 ? 0 : ($sun - $cloudFactory);
+
+        return $this->maxPower * ($sunProcent / 100);
     }
 
     public function SetWeatherSymbol($symbol) {
