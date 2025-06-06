@@ -267,7 +267,7 @@ class ForecastPoint {
                 $sun = 100;
                 break;
             case 2: // puolipilvistä
-                $sun = 85;
+                $sun = 80;
                 break;
             case 3: // pilvistä
                 $sun = 70;
