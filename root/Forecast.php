@@ -273,18 +273,22 @@ class ForecastPoint {
                 $sun = 70;
                 break;
             case 21: // heikkoja sadekuuroja
-                $sun = 50;
+                $sun = 60;
                 break;
             case 22: // sadekuuroja
-                $sun = 40;
+                $sun = 50;
                 break;
             case 23: // voimakkaita sadekuuroja
-                $sun = 30;
+                $sun = 40;
                 break;
             case 31: // heikkoa vesisadetta
+                $sun = 40;
+                break;
             case 32: // vesisadetta
+                $sun = 30;
+                break;
             case 33: // voimakasta vesisadetta
-                $sun = 20;
+                $sun = 30;
                 break;
             case 41: // heikkoja lumikuuroja
             case 42: // lumikuuroja
@@ -297,10 +301,12 @@ class ForecastPoint {
                 $sun = 0;
                 break;
             case 61: // ukkoskuuroja
-                $sun = 40;
+                $sun = 50;
                 break;
             case 62: // voimakkaita ukkoskuuroja
             case 63: // ukkosta
+                $sun = 40;
+                break;
             case 64: // voimakasta ukkosta
                 $sun = 30;
                 break;
