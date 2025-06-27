@@ -270,7 +270,7 @@ class ForecastPoint {
                 $sun = 80;
                 break;
             case 3: // pilvistä
-                $sun = 70;
+                $sun = 60;
                 break;
             case 21: // heikkoja sadekuuroja
                 $sun = 60;
