@@ -8,29 +8,16 @@ $jsonData = json_decode($jsonRaw, true);
 
 $formattedData = [];
 
-// Get today's and tomorrow's dates
-$hour_current = date("G");
+# output example
+# {"2025-10-3":{"1":[0,0,0,0],"0":[0,0,0,0]},"2025-10-2":{"23":[1,1,0,0],"22":[2,2,1,1],"21":[4,2,1,1],"20":[11,9,7,5],"19":[21,21,13,10],"18":[24,22,22,14]}}
 
-// Get the requested date from the query parameter
-$requestDate = $_GET['date'] ?? 'today'; // Default to 'today' if no parameter is provided
-$requestHour = $_GET['hour'] ?? $hour_current; // Default to current hour if no parameter is provided
-
-$today = date("Y-n-j G", strtotime("today $requestHour:00"));
-$tomorrow = date("Y-n-j G", strtotime("tomorrow $requestHour:00"));
-
-if ($requestDate === 'today') {
-    $filterDate = $today;
-} elseif ($requestDate === 'tomorrow') {
-    $filterDate = $tomorrow;
-} else {
-    // Invalid date parameter, return an error
-    header("Content-Type: application/json");
-    echo json_encode(["error" => "Invalid date parameter. Use 'today' or 'tomorrow'."]);
-    exit;
+$fDates = [];
+$h = 0;
+while ($h < 8) {
+    $fDates[date("Y-n-j", strtotime("+".$h." hour"))][date("G", strtotime("+".$h." hour"))] = null;
+    $h++;
 }
 
-// Initialize the array with 4 null values for the requested date hour quater
-$formattedData[$filterDate] = array_fill(0, 4, null);
 
 foreach ($jsonData['prices'] as $entry) {
     $date = date("Y-n-j", strtotime($entry['startDate'])); // Format date as "YYYY-M-D"
@@ -38,17 +25,20 @@ foreach ($jsonData['prices'] as $entry) {
     $minute = (int)date("i", strtotime($entry['startDate'])); // Get the minute (0-59)
     $quarter = (int)($minute / 15); // Get the quarter-hour index (0-3)
     $price = (int)$entry['price']; // Convert price to integer
-
+    
     // Only include data for the requested date
-    if ($date !== $filterDate) {
+    if (!isset($fDates[$date]) || !array_key_exists($hour, $fDates[$date])) {
         continue;
     }
-    if ($hour !== (int)$requestHour) {
-        continue;
+    
+    if (!isset($formattedData[$date])) {
+        $formattedData[$date] = [];
     }
-
-    // Set the price at the correct quarter index
-    $formattedData[$filterDate][$quarter] = $price;
+    if (!isset($formattedData[$date][$hour])) {
+        // Initialize the array with 4 null values for the requested date hour quater
+        $formattedData[$date][$hour] = array_fill(0, 4, null);
+    }
+    $formattedData[$date][$hour][$quarter] = $price;
 }
 
 header("Content-Type: application/json");
