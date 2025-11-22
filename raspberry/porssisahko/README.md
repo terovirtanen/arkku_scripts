@@ -14,7 +14,7 @@ pip install -r requirements.txt
 
 # 3. Kopioi ja muokkaa konfiguraatio
 cp .env.example .env
-nano .env  # täytä DB_* muuttujat
+nano .env  # täytä DB_* ja MQTT_* muuttujat
 
 # 4. Testaa
 ./test_run.sh
@@ -72,8 +72,11 @@ Skripti luo automaattisesti `porssisahkonet`-tietokannan ja `prices`-taulun ensi
 # Aktivoi venv ensin
 source venv/bin/activate
 
-# Aja skripti
+# Hae hintatiedot API:sta
 python3 porssisahko_read.py
+
+# Julkaise hintatiedot MQTT:lle
+python3 porssisahko_mqtt_publish.py
 ```
 
 ### Testaus
@@ -81,8 +84,11 @@ python3 porssisahko_read.py
 # Aktivoi venv ensin
 source venv/bin/activate
 
-# Aja testi
+# Testaa tiedonhaku
 ./test_run.sh
+
+# Testaa MQTT-julkaisu
+./test_mqtt.sh
 ```
 
 ### Cron-asetukset
@@ -152,12 +158,48 @@ pip list | grep -E "(requests|pytz|mysql|dotenv)"
 curl -s https://api.porssisahko.net/v2/latest-prices.json | head -100
 ```
 
+## MQTT-julkaisu
+
+### Konfiguraatio
+Lisää `.env`-tiedostoon MQTT-asetukset:
+```
+MQTT_HOST=localhost
+MQTT_PORT=1883
+MQTT_USERNAME=optional_username
+MQTT_PASSWORD=optional_password
+MQTT_TOPIC=porssisahko/prices
+MQTT_CLIENT_ID=porssisahko_publisher
+```
+
+### Käyttö
+```bash
+# Julkaise viimeisen 2h hintatiedot
+python3 porssisahko_mqtt_publish.py
+
+# Kuuntele MQTT-viestejä (testaus)
+mosquitto_sub -h localhost -t "porssisahko/prices" -v
+```
+
+### Tulosteen muoto
+```json
+{
+  "2025-11-22": {
+    "14": [12, 15, 18, 20],
+    "15": [22, 25, 23, 21]
+  }
+}
+```
+
+Jokainen tunti sisältää 4 neljännestunnin hintaa (0-3).
+
 ## Tiedostot
 
-- `porssisahko_read.py` - Pääskripti
+- `porssisahko_read.py` - Hae hintatiedot API:sta
+- `porssisahko_mqtt_publish.py` - Julkaise hintatiedot MQTT:lle
 - `setup_cron.sh` - Asenna cron-työt
 - `remove_cron.sh` - Poista cron-työt  
-- `test_run.sh` - Testaa skriptin toiminta
+- `test_run.sh` - Testaa API-haku
+- `test_mqtt.sh` - Testaa MQTT-julkaisu
 - `requirements.txt` - Python-riippuvuudet
 - `.env.example` - Esimerkkikonfiguraatio
 - `README.md` - Tämä ohjetiedosto
