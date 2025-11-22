@@ -2,11 +2,48 @@
 
 Tämä projekti hakee pörssisähkön hintatiedot Porssisähkö.net API:sta ja tallentaa ne MySQL-tietokantaan.
 
+## Pikaohje asennukseen
+
+```bash
+# 1. Luo virtuaaliympäristö
+python3 -m venv venv
+source venv/bin/activate
+
+# 2. Asenna riippuvuudet
+pip install -r requirements.txt
+
+# 3. Kopioi ja muokkaa konfiguraatio
+cp .env.example .env
+nano .env  # täytä DB_* muuttujat
+
+# 4. Testaa
+./test_run.sh
+
+# 5. Asenna cron
+./setup_cron.sh
+```
+
 ## Asennus
 
-### 1. Riippuvuudet
+### 1. Luo virtuaaliympäristö (venv)
 ```bash
+# Luo virtuaaliympäristö
+python3 -m venv venv
+
+# Aktivoi virtuaaliympäristö
+source venv/bin/activate
+
+# Asenna riippuvuudet
 pip install -r requirements.txt
+```
+
+### Virtuaaliympäristön käyttö
+```bash
+# Aktivoi aina ennen käyttöä
+source venv/bin/activate
+
+# Deaktivoi kun lopetat
+deactivate
 ```
 
 ### 2. Konfiguraatio
@@ -32,11 +69,19 @@ Skripti luo automaattisesti `porssisahkonet`-tietokannan ja `prices`-taulun ensi
 
 ### Manuaalinen ajo
 ```bash
+# Aktivoi venv ensin
+source venv/bin/activate
+
+# Aja skripti
 python3 porssisahko_read.py
 ```
 
 ### Testaus
 ```bash
+# Aktivoi venv ensin
+source venv/bin/activate
+
+# Aja testi
 ./test_run.sh
 ```
 
