@@ -77,6 +77,9 @@ python3 porssisahko_read.py
 
 # Julkaise hintatiedot MQTT:lle
 python3 porssisahko_mqtt_publish.py
+
+# Optimoi latausajat
+python3 porssisahko_optimize_charging.py
 ```
 
 ### Testaus
@@ -89,6 +92,9 @@ source venv/bin/activate
 
 # Testaa MQTT-julkaisu
 ./test_mqtt.sh
+
+# Testaa latausoptimointi
+./test_optimize.sh
 ```
 
 ### Cron-asetukset
@@ -192,14 +198,41 @@ mosquitto_sub -h localhost -t "porssisahko/prices" -v
 
 Jokainen tunti sisältää 4 neljännestunnin hintaa (0-3).
 
+## Latausoptimointi
+
+### Konfiguraatio
+Lisää `.env`-tiedostoon Shelly-asetukset:
+```
+SHELLY_IP=192.168.100.200
+SHELLY_USERNAME=optional_username
+SHELLY_PASSWORD=optional_password
+```
+
+### Käyttö
+```bash
+# Optimoi latausajat (etsii halvimman 3h jakson klo 22-04 väliltä)
+python3 porssisahko_optimize_charging.py
+
+# Testaa optimointia
+./test_optimize.sh
+```
+
+### Toiminta
+1. Hakee seuraavan 24h hintatiedot tietokannasta
+2. Etsii halvimman 3 tunnin peräkkäisen jakson aikaväliltä 22:00-04:00
+3. Päivittää Shelly-laturin ajastuksen optimaalisen jakson mukaan
+4. Näyttää löydetyn jakson hintatiedot
+
 ## Tiedostot
 
 - `porssisahko_read.py` - Hae hintatiedot API:sta
 - `porssisahko_mqtt_publish.py` - Julkaise hintatiedot MQTT:lle
+- `porssisahko_optimize_charging.py` - Optimoi latausajat halvimpaan jaksoon
 - `setup_cron.sh` - Asenna cron-työt
 - `remove_cron.sh` - Poista cron-työt  
 - `test_run.sh` - Testaa API-haku
 - `test_mqtt.sh` - Testaa MQTT-julkaisu
+- `test_optimize.sh` - Testaa latausoptimointi
 - `requirements.txt` - Python-riippuvuudet
 - `.env.example` - Esimerkkikonfiguraatio
 - `README.md` - Tämä ohjetiedosto
