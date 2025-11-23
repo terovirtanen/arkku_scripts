@@ -108,7 +108,7 @@ def find_cheapest_3h_period(price_data, timezone):
     for i, (start_time, _) in enumerate(sorted_prices):
         # Check if this start time is in allowed window (22:00-04:00)
         hour_of_day = start_time.hour
-        if not (hour_of_day >= 22 or hour_of_day <= 1):  # Allow starts until 01:xx (ending at 04:xx)
+        if not (hour_of_day >= 22 or hour_of_day <= 4):  # Allow starts until 04:xx (ending at 07:xx)
             continue
         
         # Calculate end time for 3-hour window
