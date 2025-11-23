@@ -93,54 +93,52 @@ def calculate_period_averages(price_data, period_hours=3):
     return hourly_averages
 
 
-def find_cheapest_3h_period(hourly_prices, timezone):
-    """Find the cheapest consecutive 3-hour period between 22:00-04:00."""
+def find_cheapest_3h_period(price_data, timezone):
+    """Find the cheapest consecutive 3-hour period between 22:00-04:00 (can start at any time)."""
     best_start = None
     best_avg_price = float('inf')
-    best_period_data = []
+    best_period_prices = []
     
-    # Get all hours and sort them
-    hours = sorted(hourly_prices.keys())
+    # Sort all price data by timestamp
+    sorted_prices = sorted(price_data, key=lambda x: x[0])
     
-    print("Available hourly prices:")
-    for hour in hours:
-        print(f"  {hour.strftime('%Y-%m-%d %H:00')}: {hourly_prices[hour]:.2f} c/kWh")
+    print(f"Analyzing {len(sorted_prices)} price data points for 3-hour windows...")
     
-    # Check each possible 3-hour window
-    for i in range(len(hours) - 2):
-        start_hour = hours[i]
-        
-        # Check if this hour is in the allowed time window (22:00-04:00)
-        hour_of_day = start_hour.hour
-        if not (hour_of_day >= 22 or hour_of_day <= 4):  # 22, 23, 0, 1 (for 3h period ending at 07:00)
+    # Check every possible 3-hour window starting from each data point
+    for i, (start_time, _) in enumerate(sorted_prices):
+        # Check if this start time is in allowed window (22:00-04:00)
+        hour_of_day = start_time.hour
+        if not (hour_of_day >= 22 or hour_of_day <= 1):  # Allow starts until 01:xx (ending at 04:xx)
             continue
         
-        # Check if we have 3 consecutive hours
-        hour1 = hours[i]
-        hour2 = hours[i + 1]
-        hour3 = hours[i + 2]
+        # Calculate end time for 3-hour window
+        end_time = start_time + timedelta(hours=3)
         
-        if (hour2 == hour1 + timedelta(hours=1) and 
-            hour3 == hour2 + timedelta(hours=1)):
-            
-            # Calculate average price for this 3-hour period
-            prices = [hourly_prices[hour1], hourly_prices[hour2], hourly_prices[hour3]]
-            avg_price = sum(prices) / len(prices)
-            
-            print(f"\nChecking period {hour1.strftime('%H:00')}-{hour3.strftime('%H:00')} ({hour1.strftime('%Y-%m-%d')}):")
-            print(f"  Hours: {hour1.strftime('%H:00')} ({prices[0]:.2f}), {hour2.strftime('%H:00')} ({prices[1]:.2f}), {hour3.strftime('%H:00')} ({prices[2]:.2f})")
-            print(f"  Average: {avg_price:.2f} c/kWh")
-            
-            if avg_price < best_avg_price:
-                best_avg_price = avg_price
-                best_start = hour1
-                best_period_data = [
-                    (hour1, prices[0]),
-                    (hour2, prices[1]),
-                    (hour3, prices[2])
-                ]
+        # Collect all prices within this 3-hour window
+        window_prices = []
+        for timestamp, price in sorted_prices:
+            if start_time <= timestamp < end_time:
+                window_prices.append((timestamp, float(price)))
+        
+        # Need at least some data points in the window
+        if len(window_prices) < 3:  # At least 3 data points (45 minutes of data)
+            continue
+        
+        # Calculate average price for this window
+        avg_price = sum(price for _, price in window_prices) / len(window_prices)
+        
+        print(f"\nChecking period {start_time.strftime('%Y-%m-%d %H:%M')} - {end_time.strftime('%H:%M')}:")
+        print(f"  Data points: {len(window_prices)}")
+        print(f"  Price range: {min(price for _, price in window_prices):.2f} - {max(price for _, price in window_prices):.2f} c/kWh")
+        print(f"  Average: {avg_price:.2f} c/kWh")
+        
+        if avg_price < best_avg_price:
+            best_avg_price = avg_price
+            best_start = start_time
+            best_period_prices = window_prices
+            print(f"  ⭐ New best period found!")
     
-    return best_start, best_avg_price, best_period_data
+    return best_start, best_avg_price, best_period_prices
 
 
 def update_shelly_cron(config, start_hour):
@@ -217,15 +215,8 @@ def main():
                 print("No price data available for the specified period.")
                 return 1
             
-            # Calculate hourly averages from all data points
-            hourly_prices = calculate_period_averages(price_data)
-            
-            if len(hourly_prices) < 3:
-                print(f"Not enough hourly data available. Found {len(hourly_prices)} hours, need at least 3.")
-                return 1
-            
-            # Find cheapest 3-hour period
-            best_start, best_avg_price, best_period_data = find_cheapest_3h_period(hourly_prices, timezone)
+            # Find cheapest 3-hour period (can start at any time)
+            best_start, best_avg_price, best_period_data = find_cheapest_3h_period(price_data, timezone)
             
             if best_start is None:
                 print("No suitable 3-hour period found between 22:00-04:00")
@@ -235,9 +226,14 @@ def main():
             print(f"   Start time: {best_start.strftime('%Y-%m-%d %H:%M')}")
             print(f"   End time:   {(best_start + timedelta(hours=3)).strftime('%Y-%m-%d %H:%M')}")
             print(f"   Average price: {best_avg_price:.2f} c/kWh")
-            print(f"   Period details:")
-            for hour_dt, price in best_period_data:
-                print(f"     {hour_dt.strftime('%H:%M')}: {price:.2f} c/kWh")
+            print(f"   Data points in period: {len(best_period_data)}")
+            print(f"   Price range: {min(price for _, price in best_period_data):.2f} - {max(price for _, price in best_period_data):.2f} c/kWh")
+            
+            # Show first and last few data points
+            print(f"   Sample data points:")
+            sample_data = best_period_data[:3] + (best_period_data[-3:] if len(best_period_data) > 6 else [])
+            for timestamp, price in sample_data:
+                print(f"     {timestamp.strftime('%H:%M')}: {price:.2f} c/kWh")
             
             # Update Shelly cron
             success = update_shelly_cron(config, best_start)
