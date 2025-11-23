@@ -54,28 +54,43 @@ def create_database_connection(config):
         raise
 
 
-def get_prices_for_period(cursor, start_time, end_time):
-    """Get hourly average prices for the specified time period."""
+def get_all_prices_for_period(cursor, start_time, end_time):
+    """Get all price data points for the specified time period."""
     query = """
-    SELECT 
-        DATE_FORMAT(timestamp, '%Y-%m-%d %H:00:00') as hour,
-        AVG(price) as avg_price
+    SELECT timestamp, price
     FROM prices 
     WHERE timestamp >= %s AND timestamp < %s
-    GROUP BY DATE_FORMAT(timestamp, '%Y-%m-%d %H:00:00')
-    ORDER BY hour
+    ORDER BY timestamp
     """
     
     cursor.execute(query, (start_time, end_time))
     results = cursor.fetchall()
     
-    # Convert to dictionary for easier access
-    hourly_prices = {}
-    for hour_str, avg_price in results:
-        hour_dt = datetime.strptime(hour_str, '%Y-%m-%d %H:00:00')
-        hourly_prices[hour_dt] = float(avg_price)
+    print(f"Found {len(results)} price data points in the period")
+    return results
+
+
+def calculate_period_averages(price_data, period_hours=3):
+    """Calculate average prices for consecutive 3-hour periods from all available data points."""
+    if not price_data:
+        return {}
     
-    return hourly_prices
+    # Group all prices by hour
+    hourly_data = {}
+    for timestamp, price in price_data:
+        # Round down to hour
+        hour_key = timestamp.replace(minute=0, second=0, microsecond=0)
+        if hour_key not in hourly_data:
+            hourly_data[hour_key] = []
+        hourly_data[hour_key].append(float(price))
+    
+    # Calculate hourly averages
+    hourly_averages = {}
+    for hour, prices in hourly_data.items():
+        hourly_averages[hour] = sum(prices) / len(prices)
+        print(f"  {hour.strftime('%Y-%m-%d %H:00')}: {len(prices)} data points, avg {hourly_averages[hour]:.2f} c/kWh")
+    
+    return hourly_averages
 
 
 def find_cheapest_3h_period(hourly_prices, timezone):
@@ -97,7 +112,7 @@ def find_cheapest_3h_period(hourly_prices, timezone):
         
         # Check if this hour is in the allowed time window (22:00-04:00)
         hour_of_day = start_hour.hour
-        if not (hour_of_day >= 22 or hour_of_day <= 1):  # 22, 23, 0, 1 (for 3h period ending at 04:00)
+        if not (hour_of_day >= 22 or hour_of_day <= 4):  # 22, 23, 0, 1 (for 3h period ending at 07:00)
             continue
         
         # Check if we have 3 consecutive hours
@@ -195,11 +210,18 @@ def main():
         cursor = connection.cursor()
         
         try:
-            # Get hourly prices
-            hourly_prices = get_prices_for_period(cursor, start_time, end_time)
+            # Get all price data points
+            price_data = get_all_prices_for_period(cursor, start_time, end_time)
+            
+            if not price_data:
+                print("No price data available for the specified period.")
+                return 1
+            
+            # Calculate hourly averages from all data points
+            hourly_prices = calculate_period_averages(price_data)
             
             if len(hourly_prices) < 3:
-                print(f"Not enough price data available. Found {len(hourly_prices)} hours, need at least 3.")
+                print(f"Not enough hourly data available. Found {len(hourly_prices)} hours, need at least 3.")
                 return 1
             
             # Find cheapest 3-hour period
