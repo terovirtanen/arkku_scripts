@@ -1,0 +1,18 @@
+# Estä pääsy .htaccess ja .env tiedostoon
+<Files ".htaccess">
+    Require all denied
+</Files>
+
+<Files ".env">
+    Require all denied
+</Files>
+
+# Estä pääsy backup-tiedostoihin
+<FilesMatch "\.(bak|backup|old|tmp)$">
+    Require all denied
+</FilesMatch>
+
+# Suojaa PHP konfiguraatiotiedostot
+<Files "config.php">
+    Require all denied
+</Files>
