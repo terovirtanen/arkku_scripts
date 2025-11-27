@@ -1,14 +1,38 @@
 #!/bin/bash
-# Setup cron job for porssisahko price fetching
+# Setup cron jobs for porssisahko system
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Create logs directory if it doesn't exist
 mkdir -p "$SCRIPT_DIR/logs"
 
-# Add cron jobs - runs at 3 AM and 3 PM daily with logging
-(crontab -l 2>/dev/null; echo "0 15,3 * * * cd $SCRIPT_DIR && source venv/bin/activate && python3 porssisahko_read.py >> $SCRIPT_DIR/logs/cron.log 2>&1") | crontab -
+# Check if virtual environment exists
+if [ ! -d "$SCRIPT_DIR/venv" ]; then
+    echo "Virtual environment not found at $SCRIPT_DIR/venv"
+    echo "Please create virtual environment first"
+    exit 1
+fi
 
-echo "Cron job added: runs daily at 15:00 and 03:00"
-echo "Current crontab:"
-crontab -l | grep porssisahko_read.py
+echo "Setting up porssisahko cron jobs..."
+
+# Remove existing porssisahko cron jobs to avoid duplicates
+crontab -l 2>/dev/null | grep -v -E "(porssisahko_read|porssisahko_optimize|car_charger_manager)" | crontab -
+
+# Add new cron jobs
+(
+    crontab -l 2>/dev/null
+    # Price fetching: runs at 3 AM and 3 PM daily
+    echo "0 15,3 * * * cd $SCRIPT_DIR && source venv/bin/activate && python3 porssisahko_read.py >> $SCRIPT_DIR/logs/cron.log 2>&1"
+    # Charging optimization: runs at 4 AM and 4 PM daily (after price fetch)
+    echo "0 16,4 * * * cd $SCRIPT_DIR && source venv/bin/activate && python3 porssisahko_optimize_charging.py >> $SCRIPT_DIR/logs/cron.log 2>&1"
+    # Car charger management: runs every 10 minutes
+    echo "*/10 * * * * cd $SCRIPT_DIR && source venv/bin/activate && python3 car_charger_manager.py >> $SCRIPT_DIR/logs/car_charger.log 2>&1"
+) | crontab -
+
+echo "✓ Porssisahko cron jobs added successfully:"
+echo "  Price fetching: daily at 15:00 and 03:00"
+echo "  Optimization: daily at 16:00 and 04:00"
+echo "  Car charger: every 10 minutes"
+echo ""
+echo "Current porssisahko cron jobs:"
+crontab -l | grep -E "(porssisahko|car_charger)"
