@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Finds the cheapest consecutive 3-hour period between 22:00-04:00 for electricity prices
-and updates Shelly charger cron schedule accordingly.
+Finds the cheapest consecutive 3-hour night period and all cheap day periods 
+for electricity prices and saves them to database.
 """
 
 import json
-import requests
 import mysql.connector
 from mysql.connector import Error
 import pytz
@@ -23,12 +22,7 @@ def load_config():
         'db_host': os.getenv('DB_HOST', 'localhost'),
         'db_port': int(os.getenv('DB_PORT', 3306)),
         'db_username': os.getenv('DB_USERNAME'),
-        'db_password': os.getenv('DB_PASSWORD'),
-        
-        # Shelly config
-        'shelly_ip': os.getenv('SHELLY_IP', '192.168.100.200'),
-        'shelly_username': os.getenv('SHELLY_USERNAME'),
-        'shelly_password': os.getenv('SHELLY_PASSWORD')
+        'db_password': os.getenv('DB_PASSWORD')
     }
     
     if not config['db_username'] or not config['db_password']:
@@ -52,6 +46,52 @@ def create_database_connection(config):
     except Error as e:
         print(f"Error connecting to database: {e}")
         raise
+
+
+def create_charger_table(cursor):
+    """Create car_charger table if it doesn't exist."""
+    try:
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS car_charger (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            start_time DATETIME NOT NULL,
+            end_time DATETIME NOT NULL,
+            average_price DECIMAL(10, 4) NOT NULL,
+            period_type ENUM('night', 'day') NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_start_time (start_time),
+            INDEX idx_period_type (period_type)
+        )
+        """
+        cursor.execute(create_table_query)
+        print("Table 'car_charger' created or already exists")
+    except Error as e:
+        print(f"Error creating car_charger table: {e}")
+        raise
+
+
+def save_period_to_db(cursor, start_time, end_time, avg_price, period_type):
+    """Save charging period to database."""
+    try:
+        # Delete existing periods for today of this type
+        date_str = start_time.strftime('%Y-%m-%d')
+        delete_query = """
+        DELETE FROM car_charger 
+        WHERE DATE(start_time) = %s AND period_type = %s
+        """
+        cursor.execute(delete_query, (date_str, period_type))
+        
+        # Insert new period
+        insert_query = """
+        INSERT INTO car_charger (start_time, end_time, average_price, period_type)
+        VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(insert_query, (start_time, end_time, avg_price, period_type))
+        print(f"✓ Saved {period_type} period to database: {start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')} (avg: {avg_price:.2f} c/kWh)")
+        return True
+    except Error as e:
+        print(f"Error saving period to database: {e}")
+        return False
 
 
 def get_all_prices_for_period(cursor, start_time, end_time):
@@ -93,7 +133,7 @@ def calculate_period_averages(price_data, period_hours=3):
     return hourly_averages
 
 
-def find_cheapest_3h_period(price_data, timezone):
+def find_cheapest_3h_night_period(price_data, timezone):
     """Find the cheapest consecutive 3-hour period between 22:00-04:00 (can start at any time)."""
     best_start = None
     best_avg_price = float('inf')
@@ -102,7 +142,7 @@ def find_cheapest_3h_period(price_data, timezone):
     # Sort all price data by timestamp
     sorted_prices = sorted(price_data, key=lambda x: x[0])
     
-    print(f"Analyzing {len(sorted_prices)} price data points for 3-hour windows...")
+    print(f"Analyzing {len(sorted_prices)} price data points for night 3-hour windows...")
     
     # Check every possible 3-hour window starting from each data point
     for i, (start_time, _) in enumerate(sorted_prices):
@@ -127,7 +167,7 @@ def find_cheapest_3h_period(price_data, timezone):
         # Calculate average price for this window
         avg_price = sum(price for _, price in window_prices) / len(window_prices)
         
-        print(f"\nChecking period {start_time.strftime('%Y-%m-%d %H:%M')} - {end_time.strftime('%H:%M')}:")
+        print(f"\nChecking night period {start_time.strftime('%Y-%m-%d %H:%M')} - {end_time.strftime('%H:%M')}:")
         print(f"  Data points: {len(window_prices)}")
         print(f"  Price range: {min(price for _, price in window_prices):.2f} - {max(price for _, price in window_prices):.2f} c/kWh")
         print(f"  Average: {avg_price:.2f} c/kWh")
@@ -136,59 +176,42 @@ def find_cheapest_3h_period(price_data, timezone):
             best_avg_price = avg_price
             best_start = start_time
             best_period_prices = window_prices
-            print(f"  ⭐ New best period found!")
+            print(f"  ⭐ New best night period found!")
     
     return best_start, best_avg_price, best_period_prices
 
 
-def update_shelly_cron(config, start_hour):
-    """Update Shelly device schedule to start charging at the specified hour."""
-    shelly_ip = config['shelly_ip']
+def find_day_cheap_periods(price_data, night_avg_price, timezone):
+    """Find all 15-minute periods between 08:00-23:00 where price is <= night_avg_price or <= 1 c/kWh."""
+    # Sort all price data by timestamp
+    sorted_prices = sorted(price_data, key=lambda x: x[0])
     
-    # Calculate end hour (3 hours later)
-    end_dt = start_hour + timedelta(hours=3)
-    start_hour_int = start_hour.hour
-    end_hour_int = end_dt.hour
+    print(f"\nFinding all day periods with price <= {night_avg_price:.2f} c/kWh or <= 1.00 c/kWh...")
     
-    print(f"\nUpdating Shelly at {shelly_ip}:")
-    print(f"  Charging period: {start_hour_int:02d}:00 - {end_hour_int:02d}:00")
+    cheap_periods = []
     
-    try:
-        # Create authentication if username/password provided
-        auth = None
-        if config['shelly_username'] and config['shelly_password']:
-            auth = (config['shelly_username'], config['shelly_password'])
+    for timestamp, price in sorted_prices:
+        hour = timestamp.hour
         
-        # Get current Shelly status first
-        status_url = f"http://{shelly_ip}/status"
-        response = requests.get(status_url, auth=auth, timeout=5)
+        # Only consider day hours (08:00-23:00)
+        if hour < 8 or hour >= 23:
+            continue
         
-        if response.status_code != 200:
-            print(f"✗ Could not connect to Shelly at {shelly_ip}")
-            return False
+        price_float = float(price)
         
-        print("✓ Successfully connected to Shelly")
-        
-        # For now, just print what we would set
-        # In real implementation, you'd use Shelly's schedule API
-        print(f"  Would set schedule: Turn ON at {start_hour_int:02d}:00, Turn OFF at {end_hour_int:02d}:00")
-        
-        # TODO: Implement actual Shelly schedule update based on your Shelly model
-        # Different Shelly models have different APIs for scheduling
-        # Example for Shelly 1PM:
-        # schedule_url = f"http://{shelly_ip}/settings/actions"
-        # payload = {...}  # Depends on Shelly model
-        
-        print("✓ Shelly schedule would be updated (implementation needed for your Shelly model)")
-        return True
-            
-    except requests.RequestException as e:
-        print(f"✗ Error communicating with Shelly: {e}")
-        return False
+        # Check if this price qualifies (night avg or <= 1 c/kWh)
+        if price_float <= night_avg_price or price_float <= 1.0:
+            # Each 15-minute period is saved as individual period
+            end_time = timestamp + timedelta(minutes=15)
+            cheap_periods.append((timestamp, end_time, price_float, [(timestamp, price_float)]))
+            print(f"  Found cheap 15-min period: {timestamp.strftime('%H:%M')}-{end_time.strftime('%H:%M')} ({price_float:.2f} c/kWh)")
+    
+    print(f"  Total cheap 15-minute periods found: {len(cheap_periods)}")
+    return cheap_periods
 
 
 def main():
-    """Main function that finds cheapest period and updates Shelly."""
+    """Main function that finds cheapest periods and saves them to database."""
     try:
         # Load configuration
         config = load_config()
@@ -215,35 +238,48 @@ def main():
                 print("No price data available for the specified period.")
                 return 1
             
-            # Find cheapest 3-hour period (can start at any time)
-            best_start, best_avg_price, best_period_data = find_cheapest_3h_period(price_data, timezone)
+            # Create car_charger table
+            create_charger_table(cursor)
+            
+            # Find cheapest 3-hour night period
+            best_start, best_avg_price, best_period_data = find_cheapest_3h_night_period(price_data, timezone)
             
             if best_start is None:
-                print("No suitable 3-hour period found between 22:00-04:00")
+                print("No suitable 3-hour night period found between 22:00-04:00")
                 return 1
             
-            print(f"\n🎯 BEST 3-HOUR PERIOD FOUND:")
+            print(f"\n🌙 BEST NIGHT 3-HOUR PERIOD FOUND:")
             print(f"   Start time: {best_start.strftime('%Y-%m-%d %H:%M')}")
             print(f"   End time:   {(best_start + timedelta(hours=3)).strftime('%Y-%m-%d %H:%M')}")
             print(f"   Average price: {best_avg_price:.2f} c/kWh")
             print(f"   Data points in period: {len(best_period_data)}")
             print(f"   Price range: {min(price for _, price in best_period_data):.2f} - {max(price for _, price in best_period_data):.2f} c/kWh")
             
-            # Show first and last few data points
-            print(f"   Sample data points:")
-            sample_data = best_period_data[:3] + (best_period_data[-3:] if len(best_period_data) > 6 else [])
-            for timestamp, price in sample_data:
-                print(f"     {timestamp.strftime('%H:%M')}: {price:.2f} c/kWh")
+            # Save night period to database
+            night_end_time = best_start + timedelta(hours=3)
+            save_period_to_db(cursor, best_start, night_end_time, best_avg_price, 'night')
             
-            # Update Shelly cron
-            success = update_shelly_cron(config, best_start)
+            # Find cheap day periods
+            day_periods = find_day_cheap_periods(price_data, best_avg_price, timezone)
             
-            if success:
-                print("\n✅ Charging schedule optimized successfully!")
-                return 0
-            else:
-                print("\n❌ Failed to update charging schedule")
-                return 1
+            print(f"\n☀️ CHEAP DAY PERIODS FOUND ({len(day_periods)}):")
+            for i, (start_time, end_time, avg_price, period_data) in enumerate(day_periods, 1):
+                duration_hours = (end_time - start_time).total_seconds() / 3600
+                print(f"   Period {i}: {start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')} ({duration_hours:.1f}h)")
+                print(f"     Average price: {avg_price:.2f} c/kWh")
+                print(f"     Data points: {len(period_data)}")
+                
+                # Save day period to database
+                save_period_to_db(cursor, start_time, end_time, avg_price, 'day')
+            
+            # Commit all changes
+            connection.commit()
+            
+            print(f"\n✅ Charging schedule optimized successfully!")
+            print(f"   Night period: {best_start.strftime('%H:%M')}-{night_end_time.strftime('%H:%M')}")
+            print(f"   {len(day_periods)} additional day periods found")
+            print(f"   All periods saved to database")
+            return 0
                 
         finally:
             cursor.close()
