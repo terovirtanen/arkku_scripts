@@ -182,15 +182,34 @@ def find_cheapest_3h_night_period(price_data, timezone):
 
 
 def find_day_cheap_periods(price_data, night_avg_price, timezone):
-    """Find all periods between 08:00-23:00 where price is <= night_avg_price or <= 1 c/kWh. Groups consecutive cheap periods."""
+    """Find all periods between 08:00-23:00 where price qualifies as cheap. 
+    Before night period: price <= night_avg_price OR <= 1 c/kWh
+    After night period: price <= 1 c/kWh only
+    Groups consecutive cheap periods."""
     # Sort all price data by timestamp
     sorted_prices = sorted(price_data, key=lambda x: x[0])
     
-    print(f"\nFinding day periods with price <= {night_avg_price:.2f} c/kWh or <= 1.00 c/kWh...")
+    print(f"\nFinding day periods - before night: <= {night_avg_price:.2f} c/kWh or <= 1.00 c/kWh, after night: <= 1.00 c/kWh only...")
     
     cheap_periods = []
     current_period_start = None
     current_period_prices = []
+    
+    # Find the night start time (22:00 on the same or next day)
+    night_start_time = None
+    for timestamp, _ in sorted_prices:
+        if timestamp.hour >= 22:
+            night_start_time = timestamp.replace(hour=22, minute=0, second=0, microsecond=0)
+            break
+    
+    # If no 22:00 found in data, use day after start time
+    if night_start_time is None:
+        first_timestamp = sorted_prices[0][0]
+        night_start_time = first_timestamp.replace(hour=22, minute=0, second=0, microsecond=0)
+        if night_start_time <= first_timestamp:
+            night_start_time += timedelta(days=1)
+    
+    print(f"Night period starts at: {night_start_time.strftime('%Y-%m-%d %H:%M')}")
     
     for timestamp, price in sorted_prices:
         hour = timestamp.hour
@@ -208,13 +227,24 @@ def find_day_cheap_periods(price_data, night_avg_price, timezone):
         
         price_float = float(price)
         
-        # Check if this price qualifies (night avg or <= 1 c/kWh)
-        if price_float <= night_avg_price or price_float <= 1.0:
+        # Check if price is <= 1 c/kWh (always qualifies)
+        if price_float <= 1.0:
+            price_qualifies = True
+            comparison_text = "1.00"
+        # If price > 1 c/kWh, check if we're before night start time and price <= night avg
+        elif timestamp < night_start_time and price_float <= night_avg_price:
+            price_qualifies = True
+            comparison_text = f"night avg ({night_avg_price:.2f})"
+        else:
+            price_qualifies = False
+            comparison_text = None
+        
+        if price_qualifies:
             if current_period_start is None:
                 # Start new period
                 current_period_start = timestamp
                 current_period_prices = [(timestamp, price_float)]
-                print(f"  Starting new day period at {timestamp.strftime('%H:%M')} ({price_float:.2f} c/kWh)")
+                print(f"  Starting new day period at {timestamp.strftime('%H:%M')} ({price_float:.2f} c/kWh <= {comparison_text})")
             else:
                 # Continue current period
                 current_period_prices.append((timestamp, price_float))
