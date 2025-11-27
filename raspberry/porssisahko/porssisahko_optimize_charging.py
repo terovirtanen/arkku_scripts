@@ -182,31 +182,59 @@ def find_cheapest_3h_night_period(price_data, timezone):
 
 
 def find_day_cheap_periods(price_data, night_avg_price, timezone):
-    """Find all 15-minute periods between 08:00-23:00 where price is <= night_avg_price or <= 1 c/kWh."""
+    """Find all periods between 08:00-23:00 where price is <= night_avg_price or <= 1 c/kWh. Groups consecutive cheap periods."""
     # Sort all price data by timestamp
     sorted_prices = sorted(price_data, key=lambda x: x[0])
     
-    print(f"\nFinding all day periods with price <= {night_avg_price:.2f} c/kWh or <= 1.00 c/kWh...")
+    print(f"\nFinding day periods with price <= {night_avg_price:.2f} c/kWh or <= 1.00 c/kWh...")
     
     cheap_periods = []
+    current_period_start = None
+    current_period_prices = []
     
     for timestamp, price in sorted_prices:
         hour = timestamp.hour
         
         # Only consider day hours (08:00-23:00)
         if hour < 8 or hour >= 23:
+            # End current period if we were in one
+            if current_period_start:
+                avg_price = sum(p for _, p in current_period_prices) / len(current_period_prices)
+                end_time = current_period_prices[-1][0] + timedelta(minutes=15)
+                cheap_periods.append((current_period_start, end_time, avg_price, current_period_prices))
+                current_period_start = None
+                current_period_prices = []
             continue
         
         price_float = float(price)
         
         # Check if this price qualifies (night avg or <= 1 c/kWh)
         if price_float <= night_avg_price or price_float <= 1.0:
-            # Each 15-minute period is saved as individual period
-            end_time = timestamp + timedelta(minutes=15)
-            cheap_periods.append((timestamp, end_time, price_float, [(timestamp, price_float)]))
-            print(f"  Found cheap 15-min period: {timestamp.strftime('%H:%M')}-{end_time.strftime('%H:%M')} ({price_float:.2f} c/kWh)")
+            if current_period_start is None:
+                # Start new period
+                current_period_start = timestamp
+                current_period_prices = [(timestamp, price_float)]
+                print(f"  Starting new day period at {timestamp.strftime('%H:%M')} ({price_float:.2f} c/kWh)")
+            else:
+                # Continue current period
+                current_period_prices.append((timestamp, price_float))
+        else:
+            # Price too high, end current period if we were in one
+            if current_period_start:
+                avg_price = sum(p for _, p in current_period_prices) / len(current_period_prices)
+                end_time = current_period_prices[-1][0] + timedelta(minutes=15)
+                cheap_periods.append((current_period_start, end_time, avg_price, current_period_prices))
+                print(f"  Ended day period: {current_period_start.strftime('%H:%M')}-{end_time.strftime('%H:%M')} (avg: {avg_price:.2f} c/kWh)")
+                current_period_start = None
+                current_period_prices = []
     
-    print(f"  Total cheap 15-minute periods found: {len(cheap_periods)}")
+    # Handle period that extends to end of day
+    if current_period_start:
+        avg_price = sum(p for _, p in current_period_prices) / len(current_period_prices)
+        end_time = current_period_prices[-1][0] + timedelta(minutes=15)
+        cheap_periods.append((current_period_start, end_time, avg_price, current_period_prices))
+        print(f"  Final day period: {current_period_start.strftime('%H:%M')}-{end_time.strftime('%H:%M')} (avg: {avg_price:.2f} c/kWh)")
+    
     return cheap_periods
 
 
