@@ -242,7 +242,8 @@ def main():
     2. If charger_end: Check if should restart in next 30min, start with appropriate current
     3. Other status: Start charging if allowed and car is available
     
-    Current settings: Day 08:00-23:00 = 16A, Night 23:00-08:00 = 12A
+    Current settings: Day 08:00-19:00 = 16A, Night 19:00-08:00 = 12A
+    Night charging: Never stopped (continues even outside scheduled periods)
     """
     try:
         # Load configuration
@@ -277,10 +278,19 @@ def main():
             # Decision logic based on charger status
             if current_status == 'charger_charging':
                 print("🔍 Charger is currently charging - checking if allowed")
-                if not should_charge:
-                    print("🛑 Charging not allowed at this time - stopping charger")
+                if not should_charge and is_day_time:
+                    print("🛑 Charging not allowed at this time (DAY period) - stopping charger")
                     set_shelly_charging_state(config, False, 0)
                     print("✅ Charging stopped")
+                elif not should_charge and not is_day_time:
+                    print("🌙 Charging not in schedule but it's NIGHT time - continuing charging")
+                    # Still adjust current if needed during night
+                    if charging_current != target_current:
+                        print(f"🔧 Adjusting night charging current from {charging_current}A to {target_current}A")
+                        set_charging_current(config, target_current)
+                        print(f"✅ Night charging current adjusted to {target_current}A")
+                    else:
+                        print(f"ℹ️  Night charging continues ({charging_current}A)")
                 else:
                     # Check if current needs adjustment
                     if charging_current != target_current:
