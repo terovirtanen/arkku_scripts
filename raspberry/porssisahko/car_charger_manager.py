@@ -35,7 +35,12 @@ def load_config():
         'shelly_user': os.getenv('SHELLY_USER', ''),
         'shelly_password': os.getenv('SHELLY_PASSWORD', ''),
         'shelly_enum_id': int(os.getenv('SHELLY_ENUM_ID', 200)),  # Default enum ID 200
-        'charging_current': int(os.getenv('CHARGING_CURRENT', 16))  # Default 16A (max current)
+        
+        # Charging configuration (hardcoded)
+        'day_start_hour': 8,      # Day starts at 08:00
+        'day_end_hour': 19,       # Day ends at 19:00  
+        'day_current': 16,        # Day charging current (A)
+        'night_current': 12       # Night charging current (A)
     }
     
     required_fields = ['db_username', 'db_password']
@@ -237,7 +242,7 @@ def main():
     2. If charger_end: Check if should restart in next 30min, start with appropriate current
     3. Other status: Start charging if allowed and car is available
     
-    Current settings: Day (08:00-23:00) = 16A, Night (23:00-08:00) = 12A
+    Current settings: Day 08:00-23:00 = 16A, Night 23:00-08:00 = 12A
     """
     try:
         # Load configuration
@@ -261,10 +266,10 @@ def main():
             should_charge = should_charge_now(cursor, current_time)
             print(f"Charging allowed in next 30min: {'YES' if should_charge else 'NO'}")
             
-            # Determine if it's day time (08:00-23:00) or night time
+            # Determine if it's day time or night time based on configuration
             hour = current_time.hour
-            is_day_time = 8 <= hour < 23
-            target_current = 16 if is_day_time else 12
+            is_day_time = config['day_start_hour'] <= hour < config['day_end_hour']
+            target_current = config['day_current'] if is_day_time else config['night_current']
             time_period = "DAY" if is_day_time else "NIGHT"
             
             print(f"Current time period: {time_period} (target current: {target_current}A)")
