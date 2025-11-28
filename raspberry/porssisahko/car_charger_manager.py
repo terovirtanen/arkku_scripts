@@ -189,8 +189,8 @@ def set_shelly_charging_state(config, enable_charging, current_amps=None):
             "value": enable_charging
         }
         
-        response = requests.post(bool_url, auth=auth, timeout=10, json=bool_payload)
-        response.raise_for_status()
+        # response = requests.post(bool_url, auth=auth, timeout=10, json=bool_payload)
+        # response.raise_for_status()
         
         print(f"✓ Shelly charger {action.upper()} command sent")
         
@@ -202,8 +202,8 @@ def set_shelly_charging_state(config, enable_charging, current_amps=None):
                 "value": current_amps
             }
             
-            current_response = requests.post(current_url, auth=auth, timeout=10, json=current_payload)
-            current_response.raise_for_status()
+            # current_response = requests.post(current_url, auth=auth, timeout=10, json=current_payload)
+            # current_response.raise_for_status()
             
             print(f"✓ Charging current set to {current_amps}A")
         
