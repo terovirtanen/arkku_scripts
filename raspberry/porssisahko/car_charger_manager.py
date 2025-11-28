@@ -69,15 +69,24 @@ def create_database_connection(config):
         raise
 
 
-def should_charge_now(cursor, current_time):
-    """Check if charging should be active during current time + next 30 minutes."""
+def should_charge_now(cursor, current_time, is_day_time):
+    """Check if charging should be active during current time + next 30 minutes.
+    
+    Args:
+        cursor: Database cursor
+        current_time: Current datetime
+        is_day_time: True if it's day time, False if night time
+    """
     # Check time window: now to now + 30 minutes
     end_time = current_time + timedelta(minutes=30)
+    
+    # Filter by period type based on time of day
+    period_filter = "day" if is_day_time else "night"
     
     query = """
     SELECT start_time, end_time, period_type, average_price
     FROM car_charger 
-    WHERE (
+    WHERE period_type = %s AND (
         (start_time <= %s AND end_time > %s) OR
         (start_time < %s AND end_time >= %s) OR
         (start_time >= %s AND start_time < %s)
@@ -86,6 +95,7 @@ def should_charge_now(cursor, current_time):
     """
     
     cursor.execute(query, (
+        period_filter,              # Filter by period type
         current_time, current_time,  # Period that covers current time
         end_time, end_time,          # Period that covers end time  
         current_time, end_time       # Period that starts within window
@@ -94,12 +104,12 @@ def should_charge_now(cursor, current_time):
     results = cursor.fetchall()
     
     if results:
-        print(f"Found {len(results)} charging periods overlapping with current window:")
+        print(f"Found {len(results)} {period_filter} charging periods overlapping with current window:")
         for start_time, end_time, period_type, avg_price in results:
             print(f"  {period_type}: {start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')} (avg: {avg_price:.2f} c/kWh)")
         return True
     else:
-        print("No charging periods found for current window")
+        print(f"No {period_filter} charging periods found for current window")
         return False
 
 
@@ -243,7 +253,7 @@ def main():
     3. Other status: Start charging if allowed and car is available
     
     Current settings: Day 08:00-19:00 = 16A, Night 19:00-08:00 = 12A
-    Night charging: Never stopped (continues even outside scheduled periods)
+    Period filtering: Day time uses only 'day' periods, Night time uses only 'night' periods
     """
     try:
         # Load configuration
@@ -263,10 +273,6 @@ def main():
             # Get current Shelly status first
             is_currently_charging, current_status, is_enabled, charging_current = get_shelly_status(config)
             
-            # Check if charging is allowed in next 30 minutes
-            should_charge = should_charge_now(cursor, current_time)
-            print(f"Charging allowed in next 30min: {'YES' if should_charge else 'NO'}")
-            
             # Determine if it's day time or night time based on configuration
             hour = current_time.hour
             is_day_time = config['day_start_hour'] <= hour < config['day_end_hour']
@@ -275,6 +281,10 @@ def main():
             
             print(f"Current time period: {time_period} (target current: {target_current}A)")
             
+            # Check if charging is allowed in next 30 minutes (filtered by period type)
+            should_charge = should_charge_now(cursor, current_time, is_day_time)
+            print(f"{time_period} charging allowed in next 30min: {'YES' if should_charge else 'NO'}")
+            
             # Decision logic based on charger status
             if current_status == 'charger_charging':
                 print("🔍 Charger is currently charging - checking if allowed")
@@ -282,15 +292,10 @@ def main():
                     print("🛑 Charging not allowed at this time (DAY period) - stopping charger")
                     set_shelly_charging_state(config, False, 0)
                     print("✅ Charging stopped")
-                elif not should_charge and not is_day_time:
-                    print("🌙 Charging not in schedule but it's NIGHT time - continuing charging")
-                    # Still adjust current if needed during night
-                    if charging_current != target_current:
-                        print(f"🔧 Adjusting night charging current from {charging_current}A to {target_current}A")
-                        set_charging_current(config, target_current)
-                        print(f"✅ Night charging current adjusted to {target_current}A")
-                    else:
-                        print(f"ℹ️  Night charging continues ({charging_current}A)")
+                elif not should_charge:
+                    print("🛑 Charging not allowed at this time - stopping charger")
+                    set_shelly_charging_state(config, False, 0)
+                    print("✅ Charging stopped")
                 else:
                     # Check if current needs adjustment
                     if charging_current != target_current:
