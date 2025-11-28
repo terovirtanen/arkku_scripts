@@ -26,7 +26,7 @@ crontab -l 2>/dev/null | grep -v -E "(porssisahko_read|porssisahko_optimize|car_
     # Charging optimization: runs at 4 AM and 4 PM daily (after price fetch)
     echo "22 14,3 * * * cd $SCRIPT_DIR && venv/bin/python3 porssisahko_optimize_charging.py >> $SCRIPT_DIR/logs/cron_opt.log 2>&1"
     # Car charger management: runs every 10 minutes
-    # echo "*/10 * * * * cd $SCRIPT_DIR && venv/bin/python3 car_charger_manager.py >> $SCRIPT_DIR/logs/cron_car_charger.log 2>&1"
+    echo "*/10 * * * * cd $SCRIPT_DIR && venv/bin/python3 car_charger_manager.py >> $SCRIPT_DIR/logs/cron_car_charger.log 2>&1"
 ) | crontab -
 
 echo "✓ Porssisahko cron jobs added successfully:"
