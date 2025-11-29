@@ -69,24 +69,26 @@ def create_database_connection(config):
         raise
 
 
-def should_charge_now(cursor, current_time, is_day_time):
-    """Check if charging should be active during current time + next 30 minutes.
+def should_charge_now(cursor, current_time, is_starting_charge):
+    """Check if charging should be active during current time or next 30 minutes.
     
     Args:
         cursor: Database cursor
         current_time: Current datetime
-        is_day_time: True if it's day time, False if night time
+        is_starting_charge: True if starting new charge (check +30min), False if continuing (check now only)
     """
-    # Check time window: now to now + 30 minutes
-    end_time = current_time + timedelta(minutes=30)
-    
-    # Filter by period type based on time of day
-    period_filter = "day" if is_day_time else "night"
+    # Check time window: now only OR now + 30 minutes (depending on action)
+    if is_starting_charge:
+        end_time = current_time + timedelta(minutes=30)
+        window_desc = "current time + next 30min"
+    else:
+        end_time = current_time
+        window_desc = "current time only"
     
     query = """
     SELECT start_time, end_time, period_type, average_price
     FROM car_charger 
-    WHERE period_type = %s AND (
+    WHERE (
         (start_time <= %s AND end_time > %s) OR
         (start_time < %s AND end_time >= %s) OR
         (start_time >= %s AND start_time < %s)
@@ -95,7 +97,6 @@ def should_charge_now(cursor, current_time, is_day_time):
     """
     
     cursor.execute(query, (
-        period_filter,              # Filter by period type
         current_time, current_time,  # Period that covers current time
         end_time, end_time,          # Period that covers end time  
         current_time, end_time       # Period that starts within window
@@ -104,12 +105,12 @@ def should_charge_now(cursor, current_time, is_day_time):
     results = cursor.fetchall()
     
     if results:
-        print(f"Found {len(results)} {period_filter} charging periods overlapping with current window:")
+        print(f"Found {len(results)} charging periods overlapping with {window_desc}:")
         for start_time, end_time, period_type, avg_price in results:
             print(f"  {period_type}: {start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')} (avg: {avg_price:.2f} c/kWh)")
         return True
     else:
-        print(f"No {period_filter} charging periods found for current window")
+        print(f"No charging periods found for {window_desc}")
         return False
 
 
@@ -278,14 +279,9 @@ def main():
             is_day_time = config['day_start_hour'] <= hour < config['day_end_hour']
             is_night = hour < 8
             target_current = config['day_current'] if is_day_time else config['night_current']
-            time_period = "DAY" if is_day_time else "NIGHT"
             
-            print(f"Current time period: {time_period} (target current: {target_current}A)")
+            print(f"Current time: {current_time.strftime('%H:%M')} (target current: {target_current}A)")
             
-            # Check if charging is allowed in next 30 minutes (filtered by period type)
-            should_charge = should_charge_now(cursor, current_time, is_day_time)
-            print(f"{time_period} charging allowed in next 30min: {'YES' if should_charge else 'NO'}")
-
             # Decision logic based on charger status
             # charger_free -> car not connected
             # charger_charging -> car charging
@@ -294,13 +290,13 @@ def main():
             print(f"ℹ️  Charger status: {current_status}")
 
             if current_status == 'charger_charging':
-                print("🔍 Charger is currently charging - checking if allowed")
-                if not should_charge and is_day_time:
-                    print("🛑 Charging not allowed at this time (DAY period) - stopping charger")
-                    set_shelly_charging_state(config, False, 0)
-                    print("✅ Charging stopped")
+                print("🔍 Charger is currently charging - checking if should continue")
+                # Check if charging should continue (current time only, no +30min)
+                should_continue = should_charge_now(cursor, current_time, False)
+                print(f"Charging should continue: {'YES' if should_continue else 'NO'}")
+                
                 # Night charging may be scheduled to the device, do not mess it up
-                elif not should_charge and not is_night:
+                if not should_continue and not is_night:
                     print("🛑 Charging not allowed at this time - stopping charger")
                     set_shelly_charging_state(config, False, 0)
                     print("✅ Charging stopped")
@@ -311,16 +307,20 @@ def main():
                         set_charging_current(config, target_current)
                         print(f"✅ Charging current adjusted to {target_current}A")
                     else:
-                        print(f"ℹ️  Charging continues as planned ({charging_current}A, {time_period} period)")
+                        print(f"ℹ️  Charging continues as planned ({charging_current}A)")
                         
             elif current_status == 'charger_end':
                 print("🔍 Charging session ended - checking if should restart")
-                if should_charge:
-                    print(f"🚀 Starting new charging session ({time_period} period, {target_current}A)")
+                # Check if charging should start (current time + 30min window)
+                should_start = should_charge_now(cursor, current_time, True)
+                print(f"Charging should start in next 30min: {'YES' if should_start else 'NO'}")
+                
+                if should_start:
+                    print(f"🚀 Starting new charging session ({target_current}A)")
                     set_shelly_charging_state(config, True, target_current)
                     print("✅ Charging started")
                 else:
-                    print("ℹ️  Charging session ended and no charging allowed - staying idle")
+                    print("ℹ️  Charging session ended and no charging scheduled - staying idle")
                                 
             return 0
                 
