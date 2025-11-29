@@ -22,7 +22,13 @@ def load_config():
         'db_host': os.getenv('DB_HOST', 'localhost'),
         'db_port': int(os.getenv('DB_PORT', 3306)),
         'db_username': os.getenv('DB_USERNAME'),
-        'db_password': os.getenv('DB_PASSWORD')
+        'db_password': os.getenv('DB_PASSWORD'),
+        
+        # Day period configuration (hardcoded)
+        'cheap_price_limit': 1.0,    # Price limit for cheap periods (c/kWh)
+        'night_start_hour': 22,      # Night starts at 22:00
+        'night_end_hour': 8,         # Night ends at 08:00
+        'day_start_hour': 19         # Day period starts at 19:00
     }
     
     if not config['db_username'] or not config['db_password']:
@@ -181,31 +187,41 @@ def find_cheapest_3h_night_period(price_data, timezone):
     return best_start, best_avg_price, best_period_prices
 
 
-def find_day_cheap_periods(price_data, night_avg_price, timezone):
-    """Find all periods between 08:00-23:00 where price qualifies as cheap. 
-    Before night period: price <= night_avg_price OR <= 1 c/kWh
-    After night period: price <= 1 c/kWh only
+def find_day_cheap_periods(price_data, night_avg_price, config, timezone):
+    """Find all periods where price qualifies as cheap based on time periods:
+    - 19:00-night_start: compare only to night average price
+    - night_end-14:30: compare only to cheap_price_limit
+    - 14:30-19:00: compare to both cheap_price_limit AND night average (either qualifies)
     Groups consecutive cheap periods."""
     # Sort all price data by timestamp
     sorted_prices = sorted(price_data, key=lambda x: x[0])
     
-    print(f"\nFinding day periods - before night: <= {night_avg_price:.2f} c/kWh or <= 1.00 c/kWh, after night: <= 1.00 c/kWh only...")
+    cheap_price_limit = config['cheap_price_limit']
+    night_start_hour = config['night_start_hour']
+    night_end_hour = config['night_end_hour']
+    day_start_hour = config['day_start_hour']
+    
+    print(f"\nFinding day periods with configuration:")
+    print(f"  Cheap price limit: {cheap_price_limit:.2f} c/kWh")
+    print(f"  Night hours: {night_start_hour}:00 - {night_end_hour:02d}:00")
+    print(f"  Day starts at: {day_start_hour}:00")
+    print(f"  Night average price: {night_avg_price:.2f} c/kWh")
     
     cheap_periods = []
     current_period_start = None
     current_period_prices = []
     
-    # Find the night start time (22:00 on the same or next day)
+    # Find the night start time based on config
     night_start_time = None
     for timestamp, _ in sorted_prices:
-        if timestamp.hour >= 22:
-            night_start_time = timestamp.replace(hour=22, minute=0, second=0, microsecond=0)
+        if timestamp.hour >= night_start_hour:
+            night_start_time = timestamp.replace(hour=night_start_hour, minute=0, second=0, microsecond=0)
             break
     
-    # If no 22:00 found in data, use day after start time
+    # If no night start found in data, use day after start time
     if night_start_time is None:
         first_timestamp = sorted_prices[0][0]
-        night_start_time = first_timestamp.replace(hour=22, minute=0, second=0, microsecond=0)
+        night_start_time = first_timestamp.replace(hour=night_start_hour, minute=0, second=0, microsecond=0)
         if night_start_time <= first_timestamp:
             night_start_time += timedelta(days=1)
     
@@ -213,9 +229,37 @@ def find_day_cheap_periods(price_data, night_avg_price, timezone):
     
     for timestamp, price in sorted_prices:
         hour = timestamp.hour
+        minute = timestamp.minute
+        time_decimal = hour + minute / 60.0
+        price_float = float(price)
         
-        # Only consider day hours (08:00-23:00)
-        if hour < 8 or hour >= 23:
+        # Determine which time period we're in and what comparison to use
+        price_qualifies = False
+        comparison_text = None
+        
+        # day_start_hour - night_start (e.g., 19:00 - 22:00): compare only to night average
+        if day_start_hour <= hour < night_start_hour:
+            if price_float <= night_avg_price:
+                price_qualifies = True
+                comparison_text = f"night avg ({night_avg_price:.2f})"
+        
+        # night_end (e.g., 08:00) - 14:30: compare only to cheap_price_limit
+        elif night_end_hour <= hour < 14 or (hour == 14 and minute < 30):
+            if price_float <= cheap_price_limit:
+                price_qualifies = True
+                comparison_text = f"cheap limit ({cheap_price_limit:.2f})"
+        
+        # 14:30 - day_start_hour: compare to both (either qualifies)
+        elif (hour == 14 and minute >= 30) or (15 <= hour < day_start_hour):
+            if price_float <= cheap_price_limit:
+                price_qualifies = True
+                comparison_text = f"cheap limit ({cheap_price_limit:.2f})"
+            elif price_float <= night_avg_price:
+                price_qualifies = True
+                comparison_text = f"night avg ({night_avg_price:.2f})"
+        
+        # Outside day periods - skip
+        else:
             # End current period if we were in one
             if current_period_start:
                 avg_price = sum(p for _, p in current_period_prices) / len(current_period_prices)
@@ -224,20 +268,6 @@ def find_day_cheap_periods(price_data, night_avg_price, timezone):
                 current_period_start = None
                 current_period_prices = []
             continue
-        
-        price_float = float(price)
-        
-        # Check if price is <= 1 c/kWh (always qualifies)
-        if price_float <= 1.0:
-            price_qualifies = True
-            comparison_text = "1.00"
-        # If price > 1 c/kWh, check if we're before night start time and price <= night avg
-        elif timestamp < night_start_time and price_float <= night_avg_price:
-            price_qualifies = True
-            comparison_text = f"night avg ({night_avg_price:.2f})"
-        else:
-            price_qualifies = False
-            comparison_text = None
         
         if price_qualifies:
             if current_period_start is None:
@@ -277,10 +307,13 @@ def main():
         # Setup timezone
         timezone = pytz.timezone("Europe/Helsinki")
         
-        # Calculate time range (next 24 hours from now)
+        # Calculate time range (from current hour to end of next day)
         now = datetime.now(timezone)
         start_time = now.replace(minute=0, second=0, microsecond=0)
-        end_time = start_time + timedelta(hours=24)
+        
+        # End time is start of day after tomorrow (i.e., end of next day)
+        next_day = start_time.date() + timedelta(days=1)
+        end_time = timezone.localize(datetime.combine(next_day + timedelta(days=1), time(0, 0)))
         
         print(f"Analyzing electricity prices from {start_time.strftime('%Y-%m-%d %H:%M')} to {end_time.strftime('%Y-%m-%d %H:%M')}")
         
@@ -318,7 +351,7 @@ def main():
             save_period_to_db(cursor, best_start, night_end_time, best_avg_price, 'night')
             
             # Find cheap day periods
-            day_periods = find_day_cheap_periods(price_data, best_avg_price, timezone)
+            day_periods = find_day_cheap_periods(price_data, best_avg_price, config, timezone)
             
             print(f"\n☀️ CHEAP DAY PERIODS FOUND ({len(day_periods)}):")
             for i, (start_time, end_time, avg_price, period_data) in enumerate(day_periods, 1):
