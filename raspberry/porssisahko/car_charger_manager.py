@@ -204,8 +204,8 @@ def set_shelly_charging_state(config, enable_charging, current_amps=None):
             "value": enable_charging
         }
         
-        # response = requests.post(bool_url, auth=auth, timeout=10, json=bool_payload)
-        # response.raise_for_status()
+        response = requests.post(bool_url, auth=auth, timeout=10, json=bool_payload)
+        response.raise_for_status()
         
         print(f"✓ Shelly charger {action.upper()} command sent")
         
@@ -217,8 +217,8 @@ def set_shelly_charging_state(config, enable_charging, current_amps=None):
                 "value": current_amps
             }
             
-            # current_response = requests.post(current_url, auth=auth, timeout=10, json=current_payload)
-            # current_response.raise_for_status()
+            current_response = requests.post(current_url, auth=auth, timeout=10, json=current_payload)
+            current_response.raise_for_status()
             
             print(f"✓ Charging current set to {current_amps}A")
         
@@ -250,7 +250,7 @@ def main():
     Logic:
     1. If charger_charging: Check if still allowed, stop if not, adjust current if needed
     2. If charger_end: Check if should restart in next 30min, start with appropriate current
-    3. Other status: Start charging if allowed and car is available
+    3. Other status: Do nothing
     
     Current settings: Day 08:00-19:00 = 16A, Night 19:00-08:00 = 12A
     Period filtering: Day time uses only 'day' periods, Night time uses only 'night' periods
@@ -276,6 +276,7 @@ def main():
             # Determine if it's day time or night time based on configuration
             hour = current_time.hour
             is_day_time = config['day_start_hour'] <= hour < config['day_end_hour']
+            is_night = hour < 8
             target_current = config['day_current'] if is_day_time else config['night_current']
             time_period = "DAY" if is_day_time else "NIGHT"
             
@@ -284,15 +285,22 @@ def main():
             # Check if charging is allowed in next 30 minutes (filtered by period type)
             should_charge = should_charge_now(cursor, current_time, is_day_time)
             print(f"{time_period} charging allowed in next 30min: {'YES' if should_charge else 'NO'}")
-            
+
             # Decision logic based on charger status
+            # charger_free -> car not connected
+            # charger_charging -> car charging
+            # charger_end -> charging session ended, car connected, possible restart charging
+            # charger_wait -> car connected, charging is ended battery full
+            print(f"ℹ️  Charger status: {current_status}")
+
             if current_status == 'charger_charging':
                 print("🔍 Charger is currently charging - checking if allowed")
                 if not should_charge and is_day_time:
                     print("🛑 Charging not allowed at this time (DAY period) - stopping charger")
                     set_shelly_charging_state(config, False, 0)
                     print("✅ Charging stopped")
-                elif not should_charge:
+                # Night charging may be scheduled to the device, do not mess it up
+                elif not should_charge and not is_night:
                     print("🛑 Charging not allowed at this time - stopping charger")
                     set_shelly_charging_state(config, False, 0)
                     print("✅ Charging stopped")
@@ -313,17 +321,7 @@ def main():
                     print("✅ Charging started")
                 else:
                     print("ℹ️  Charging session ended and no charging allowed - staying idle")
-                    
-            else:
-                print(f"ℹ️  Charger status: {current_status}")
-                if should_charge and current_status in ['charger_free', 'charger_insert', 'charger_wait']:
-                    print(f"🔌 Car available and charging allowed - starting charging ({target_current}A)")
-                    set_shelly_charging_state(config, True, target_current)
-                    print("✅ Charging started")
-                else:
-                    status_info = f"enabled={is_enabled}" if is_enabled else "disabled"
-                    print(f"ℹ️  No action needed: Status={current_status}, {status_info}")
-            
+                                
             return 0
                 
         finally:
