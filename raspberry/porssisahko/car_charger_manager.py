@@ -81,26 +81,27 @@ def should_charge_now(cursor, current_time, is_starting_charge):
     if is_starting_charge:
         end_time = current_time + timedelta(minutes=30)
         window_desc = "current time + next 30min"
+        
+        # For starting charge: period must start <= current_time AND end >= end_time (covers full 30min window)
+        query = """
+        SELECT start_time, end_time, period_type, average_price
+        FROM car_charger 
+        WHERE start_time <= %s AND end_time >= %s
+        ORDER BY start_time
+        """
+        cursor.execute(query, (current_time, end_time))
+        
     else:
-        end_time = current_time
         window_desc = "current time only"
-    
-    query = """
-    SELECT start_time, end_time, period_type, average_price
-    FROM car_charger 
-    WHERE (
-        (start_time <= %s AND end_time > %s) OR
-        (start_time < %s AND end_time >= %s) OR
-        (start_time >= %s AND start_time < %s)
-    )
-    ORDER BY start_time
-    """
-    
-    cursor.execute(query, (
-        current_time, current_time,  # Period that covers current time
-        end_time, end_time,          # Period that covers end time  
-        current_time, end_time       # Period that starts within window
-    ))
+        
+        # For continuing charge: period must cover current time
+        query = """
+        SELECT start_time, end_time, period_type, average_price
+        FROM car_charger 
+        WHERE start_time <= %s AND end_time > %s
+        ORDER BY start_time
+        """
+        cursor.execute(query, (current_time, current_time))
     
     results = cursor.fetchall()
     
