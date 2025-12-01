@@ -152,17 +152,24 @@ def find_cheapest_3h_night_period(price_data, timezone):
         # If it's before 22:00, look at tonight's period starting at 22:00
         night_start = today_22
     
-    # Tomorrow's 04:00 is the end of the night period
-    tomorrow_4 = (night_start + timedelta(days=1)).replace(hour=4, minute=0, second=0, microsecond=0)
-    tomorrow_7 = (night_start + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
+    # Tomorrow's 04:00 and 07:00 (naive datetime for comparison with database timestamps)
+    tomorrow_4_naive = (night_start + timedelta(days=1)).replace(hour=4, minute=0, second=0, microsecond=0, tzinfo=None)
+    tomorrow_7_naive = (night_start + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0, tzinfo=None)
+    night_start_naive = night_start.replace(tzinfo=None)
     
-    print(f"Searching for cheapest 3h period between {night_start.strftime('%Y-%m-%d %H:%M')} and {tomorrow_4.strftime('%Y-%m-%d %H:%M')}")
+    print(f"Searching for cheapest 3h period between {night_start.strftime('%Y-%m-%d %H:%M')} and {tomorrow_4_naive.strftime('%Y-%m-%d %H:%M')}")
     
     # Filter price data to only include the night period
     night_prices = []
     for timestamp, price in price_data:
-        if night_start <= timestamp <= tomorrow_7:
-            night_prices.append((timestamp, price))
+        # Make sure timestamp is naive for comparison
+        if hasattr(timestamp, 'tzinfo') and timestamp.tzinfo is not None:
+            timestamp_naive = timestamp.replace(tzinfo=None)
+        else:
+            timestamp_naive = timestamp
+            
+        if night_start_naive <= timestamp_naive <= tomorrow_7_naive:
+            night_prices.append((timestamp_naive, price))
     
     if len(night_prices) < 12:  # Need at least 3 hours of data (12 x 15min intervals)
         print(f"Not enough night price data: {len(night_prices)} data points (need at least 12)")
@@ -182,8 +189,8 @@ def find_cheapest_3h_night_period(price_data, timezone):
         start_time = sorted_night_prices[i][0]
         end_time = start_time + timedelta(hours=3)
         
-        # Make sure the 3-hour window doesn't extend beyond tomorrow 04:00
-        if start_time > tomorrow_4:
+        # Make sure the 3-hour window starts before tomorrow 04:00
+        if start_time > tomorrow_4_naive:
             break
         
         # Collect all prices within this 3-hour window
@@ -206,6 +213,10 @@ def find_cheapest_3h_night_period(price_data, timezone):
             best_start = start_time
             best_period_prices = window_prices
             print(f"  ⭐ New best night period!")
+    
+    # Convert best_start back to timezone-aware for return
+    if best_start is not None:
+        best_start = timezone.localize(best_start)
     
     return best_start, best_avg_price, best_period_prices
 
