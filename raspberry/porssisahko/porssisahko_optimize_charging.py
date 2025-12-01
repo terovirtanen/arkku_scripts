@@ -80,12 +80,12 @@ def save_period_to_db(cursor, start_time, end_time, avg_price, period_type):
     """Save charging period to database."""
     try:
         # Delete existing periods for today of this type
-        date_str = start_time.strftime('%Y-%m-%d %H:%M')
-        delete_query = """
-        DELETE FROM car_charger 
-        WHERE DATE(start_time) = %s AND period_type = %s
-        """
-        cursor.execute(delete_query, (date_str, period_type))
+        # date_str = start_time.strftime('%Y-%m-%d %H:%M')
+        # delete_query = """
+        # DELETE FROM car_charger 
+        # WHERE DATE(start_time) = %s AND period_type = %s
+        # """
+        # cursor.execute(delete_query, (date_str, period_type))
         
         # Insert new period
         insert_query = """
