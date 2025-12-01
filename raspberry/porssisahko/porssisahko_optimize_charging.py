@@ -140,49 +140,72 @@ def calculate_period_averages(price_data, period_hours=3):
 
 
 def find_cheapest_3h_night_period(price_data, timezone):
-    """Find the cheapest consecutive 3-hour period between 22:00-04:00 (can start at any time)."""
+    """Find the cheapest consecutive 3-hour period between today 22:00 and tomorrow 04:00."""
+    # Find today's 22:00 and tomorrow's 04:00
+    now = datetime.now(timezone)
+    today_22 = now.replace(hour=22, minute=0, second=0, microsecond=0)
+    
+    # If it's already past 22:00 today, look at tonight's period
+    if now.hour >= 22:
+        night_start = today_22
+    else:
+        # If it's before 22:00, look at tonight's period starting at 22:00
+        night_start = today_22
+    
+    # Tomorrow's 04:00 is the end of the night period
+    tomorrow_4 = (night_start + timedelta(days=1)).replace(hour=4, minute=0, second=0, microsecond=0)
+    tomorrow_7 = (night_start + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
+    
+    print(f"Searching for cheapest 3h period between {night_start.strftime('%Y-%m-%d %H:%M')} and {tomorrow_4.strftime('%Y-%m-%d %H:%M')}")
+    
+    # Filter price data to only include the night period
+    night_prices = []
+    for timestamp, price in price_data:
+        if night_start <= timestamp <= tomorrow_7:
+            night_prices.append((timestamp, price))
+    
+    if len(night_prices) < 12:  # Need at least 3 hours of data (12 x 15min intervals)
+        print(f"Not enough night price data: {len(night_prices)} data points (need at least 12)")
+        return None, float('inf'), []
+    
+    print(f"Found {len(night_prices)} price data points in night period")
+    
     best_start = None
     best_avg_price = float('inf')
     best_period_prices = []
     
-    # Sort all price data by timestamp
-    sorted_prices = sorted(price_data, key=lambda x: x[0])
+    # Check every possible 3-hour window within the night period
+    sorted_night_prices = sorted(night_prices, key=lambda x: x[0])
     
-    print(f"Analyzing {len(sorted_prices)} price data points for night 3-hour windows...")
-    
-    # Check every possible 3-hour window starting from each data point
-    for i, (start_time, _) in enumerate(sorted_prices):
-        # Check if this start time is in allowed window (22:00-04:00)
-        hour_of_day = start_time.hour
-        if not (hour_of_day >= 22 or hour_of_day <= 4):  # Allow starts until 04:xx (ending at 07:xx)
-            continue
-        
-        # Calculate end time for 3-hour window
+    # Try starting a 3-hour window from each 15-minute interval
+    for i in range(len(sorted_night_prices)):
+        start_time = sorted_night_prices[i][0]
         end_time = start_time + timedelta(hours=3)
+        
+        # Make sure the 3-hour window doesn't extend beyond tomorrow 04:00
+        if start_time > tomorrow_4:
+            break
         
         # Collect all prices within this 3-hour window
         window_prices = []
-        for timestamp, price in sorted_prices:
+        for timestamp, price in sorted_night_prices:
             if start_time <= timestamp < end_time:
                 window_prices.append((timestamp, float(price)))
         
-        # Need at least some data points in the window
-        if len(window_prices) < 3:  # At least 3 data points (45 minutes of data)
+        # Need sufficient data points for a reliable average
+        if len(window_prices) < 12:  # At least 3 hours of data
             continue
         
         # Calculate average price for this window
         avg_price = sum(price for _, price in window_prices) / len(window_prices)
         
-        print(f"\nChecking night period {start_time.strftime('%Y-%m-%d %H:%M')} - {end_time.strftime('%H:%M')}:")
-        print(f"  Data points: {len(window_prices)}")
-        print(f"  Price range: {min(price for _, price in window_prices):.2f} - {max(price for _, price in window_prices):.2f} c/kWh")
-        print(f"  Average: {avg_price:.2f} c/kWh")
+        print(f"Period {start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')}: {len(window_prices)} points, avg {avg_price:.2f} c/kWh")
         
         if avg_price < best_avg_price:
             best_avg_price = avg_price
             best_start = start_time
             best_period_prices = window_prices
-            print(f"  ⭐ New best night period found!")
+            print(f"  ⭐ New best night period!")
     
     return best_start, best_avg_price, best_period_prices
 
@@ -364,7 +387,7 @@ def main():
                 save_period_to_db(cursor, start_time, end_time, avg_price, 'day')
             
             # Commit all changes
-            connection.commit()
+            connection.commit();
             
             print(f"\n✅ Charging schedule optimized successfully!")
             print(f"   Night period: {best_start.strftime('%H:%M')}-{night_end_time.strftime('%H:%M')}")
