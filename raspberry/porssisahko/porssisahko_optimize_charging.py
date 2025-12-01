@@ -231,9 +231,9 @@ def find_day_cheap_periods(price_data, night_avg_price, config, timezone):
     sorted_prices = sorted(price_data, key=lambda x: x[0])
     
     cheap_price_limit = config['cheap_price_limit']
-    night_start_hour = config['night_start_hour']
-    night_end_hour = config['night_end_hour']
-    day_start_hour = config['day_start_hour']
+    night_start_hour = config['night_start_hour'] #22
+    night_end_hour = config['night_end_hour'] # 8
+    day_start_hour = config['day_start_hour'] #19
     
     print(f"\nFinding day periods with configuration:")
     print(f"  Cheap price limit: {cheap_price_limit:.2f} c/kWh")
@@ -245,20 +245,12 @@ def find_day_cheap_periods(price_data, night_avg_price, config, timezone):
     current_period_start = None
     current_period_prices = []
     
+    now = datetime.now()
+
     # Find the night start time based on config
-    night_start_time = None
-    for timestamp, _ in sorted_prices:
-        if timestamp.hour >= night_start_hour:
-            night_start_time = timestamp.replace(hour=night_start_hour, minute=0, second=0, microsecond=0)
-            break
-    
-    # If no night start found in data, use day after start time
-    if night_start_time is None:
-        first_timestamp = sorted_prices[0][0]
-        night_start_time = first_timestamp.replace(hour=night_start_hour, minute=0, second=0, microsecond=0)
-        if night_start_time <= first_timestamp:
-            night_start_time += timedelta(days=1)
-    
+    night_start_time = now.replace(hour=night_start_hour, minute=0, second=0, microsecond=0, tzinfo=None)
+    night_end_time = (now + timedelta(days=1)).replace(hour=night_end_hour, minute=0, second=0, microsecond=0, tzinfo=None)
+    day_evening_start_time = now.replace(hour=day_start_hour, minute=0, second=0, microsecond=0, tzinfo=None)
     print(f"Night period starts at: {night_start_time.strftime('%Y-%m-%d %H:%M')}")
     
     for timestamp, price in sorted_prices:
@@ -272,19 +264,19 @@ def find_day_cheap_periods(price_data, night_avg_price, config, timezone):
         comparison_text = None
         
         # day_start_hour - night_start (e.g., 19:00 - 22:00): compare only to night average
-        if day_start_hour <= hour < night_start_hour:
+        if day_evening_start_time <= timestamp < night_start_time:
             if price_float <= night_avg_price:
                 price_qualifies = True
                 comparison_text = f"night avg ({night_avg_price:.2f})"
         
-        # night_end (e.g., 08:00) - 14:30: compare only to cheap_price_limit
-        elif night_end_hour <= hour < 14 or (hour == 14 and minute < 30):
+        # night_end (e.g., 08:00) - ...: compare only to cheap_price_limit
+        elif night_end_time <= timestamp:
             if price_float <= cheap_price_limit:
                 price_qualifies = True
                 comparison_text = f"cheap limit ({cheap_price_limit:.2f})"
         
-        # 14:30 - day_start_hour: compare to both (either qualifies)
-        elif (hour == 14 and minute >= 30) or (15 <= hour < day_start_hour):
+        # timestamp - day_evening_start_time: compare to both (either qualifies)
+        elif timestamp < day_evening_start_time:
             if price_float <= cheap_price_limit:
                 price_qualifies = True
                 comparison_text = f"cheap limit ({cheap_price_limit:.2f})"
