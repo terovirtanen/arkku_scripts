@@ -23,8 +23,13 @@ class Database {
         try {
             $this->connection = new PDO($dsn, $config['username'], $config['password'], $options);
         } catch (PDOException $e) {
-            error_log("Database connection failed: " . $e->getMessage());
-            throw new Exception("Database connection failed");
+            $this->createDatabaseIfNotExists();
+            try {
+                $this->connection = new PDO($dsn, $config['username'], $config['password'], $options);
+            } catch (PDOException $e) {
+                error_log("Database connection failed: " . $e->getMessage());
+                throw new Exception("Database connection failed");
+            }
         }
     }
     
@@ -45,7 +50,7 @@ class Database {
     // weight (float)
     // time (datetime)
     // type (varchar 50)
-    public function createDatabaseIfNotExists() {
+    private function createDatabaseIfNotExists() {
         $config = [
             'host' => $_ENV['DB_HOST'] ?? 'localhost',
             'username' => $_ENV['DB_USER'],
