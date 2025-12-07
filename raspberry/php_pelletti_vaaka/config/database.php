@@ -39,10 +39,6 @@ class Database {
         }
         return self::$instance;
     }
-    
-    public function getConnection() {
-        return $this->connection;
-    }
 
     // create database if it does not exist
     // database columns are
@@ -162,14 +158,5 @@ class Database {
                 return "time >= DATE_SUB(NOW(), INTERVAL 1 WEEK)"; // default to week
         }
     }
-}
-
-// Käyttö
-try {
-    $db = Database::getInstance();
-    $db->createDatabaseIfNotExists();
-    $pdo = $db->getConnection();
-} catch (Exception $e) {
-    die("Database error occurred");
 }
 ?>
