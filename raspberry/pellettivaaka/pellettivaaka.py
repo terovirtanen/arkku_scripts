@@ -1,6 +1,7 @@
 # hx711_gpio.py needs to copy to pico root or to lib/ -directory
 from hx711_gpio import HX711
 from machine import Pin
+import urequests as requests
 
 # Initialize HX711
 # Example for Pycom device, gpio mode
@@ -54,27 +55,33 @@ while True:
     value = hx711.get_value()
     print("Weight value: " + str(value))
 
-    # todo: send scale value to remote end point
+    # Send scale value to remote endpoint as JSON per API spec
+    endpoint = "http://192.168.100.50/pellettivaaka/index.php"
+    headers = {"Content-Type": "application/json"}
+    payload = {"weight": value, "type": "init"}
 
-    # ...and then define the headers and payloads
-    # headers = ...
-    # payload = ...
-    
-    # Then send it in a try/except block
     # try:
     #     print("sending...")
-    #     response = requests.post("A REMOTE END POINT", headers=headers, data=payload)
+    #     response = requests.post(endpoint, headers=headers, json=payload)
     #     print("sent (" + str(response.status_code) + "), status = " + str(wlan.status()) )
+    #     # Optionally print response content
+    #     try:
+    #         print(response.text)
+    #     except:
+    #         pass
     #     response.close()
-    # except:
-    #     print("could not connect (status =" + str(wlan.status()) + ")")
+    # except Exception as e:
+    #     print("could not connect (status=" + str(wlan.status()) + ") error=" + str(e))
     #     if wlan.status() < 0 or wlan.status() >= 3:
     #         print("trying to reconnect...")
-    #         wlan.disconnect()
+    #         try:
+    #             wlan.disconnect()
+    #         except:
+    #             pass
     #         wlan.connect(ssid, password)
     #         if wlan.status() == 3:
     #             print('connected')
     #         else:
     #             print('failed')
 
-    time.sleep(5)
+    time.sleep(10)
