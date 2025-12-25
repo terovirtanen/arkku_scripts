@@ -1,6 +1,6 @@
 # hx711_gpio.py needs to copy to pico root or to lib/ -directory
 from hx711_gpio import HX711
-from machine import Pin
+from machine import Pin, deepsleep
 import urequests as requests
 
 # Initialize HX711
@@ -15,21 +15,14 @@ pin_SCK = Pin(6, Pin.OUT)
 
 hx711 = HX711(pin_SCK, pin_OUT)
 
-hx711_offset = 0
-hx711.set_offset(hx711_offset)
-value = hx711.read()
-value = hx711.get_value()
-print("Weight init value: " + str(value))
-
 # network connection setup
 import time
 import network
-ssid = 'Wireless Network'
-password = 'The Password'
+import config
  
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
-wlan.connect(ssid, password)
+wlan.connect(config.WLAN_SSID, config.WLAN_PASSWORD)
 # Wait for connect or fail
 max_wait = 10
 while max_wait > 0:
@@ -37,7 +30,11 @@ while max_wait > 0:
         break
     max_wait -= 1
     print('waiting for connection...')
-    time.sleep(1)
+    print("could not connect (status=" + str(wlan.status()) + ")")
+    time.sleep(2)
+
+status = wlan.ifconfig()
+print( 'wlan status = ' + status[0] )
 
 # Handle connection error
 if wlan.status() != 3:
@@ -52,36 +49,44 @@ while True:
 
     # Do things here, perhaps measure something using a sensor?
     # value = hx711.read()
-    value = hx711.get_value()
-    print("Weight value: " + str(value))
+    value_avg = hx711.read_average(5) - config.HX711_OFFSET
+    # value_unit is in kg
+    value_unit = value_avg / config.REFERENCE_UNIT / 1000
+    print("Weight value: " + str(value_unit) + " kg")
 
     # Send scale value to remote endpoint as JSON per API spec
     endpoint = "http://192.168.100.50/pellettivaaka/index.php"
     headers = {"Content-Type": "application/json"}
-    payload = {"weight": value, "type": "init"}
+    payload = {"weight": value_unit, "type": "read"}
 
-    # try:
-    #     print("sending...")
-    #     response = requests.post(endpoint, headers=headers, json=payload)
-    #     print("sent (" + str(response.status_code) + "), status = " + str(wlan.status()) )
-    #     # Optionally print response content
-    #     try:
-    #         print(response.text)
-    #     except:
-    #         pass
-    #     response.close()
-    # except Exception as e:
-    #     print("could not connect (status=" + str(wlan.status()) + ") error=" + str(e))
-    #     if wlan.status() < 0 or wlan.status() >= 3:
-    #         print("trying to reconnect...")
-    #         try:
-    #             wlan.disconnect()
-    #         except:
-    #             pass
-    #         wlan.connect(ssid, password)
-    #         if wlan.status() == 3:
-    #             print('connected')
-    #         else:
-    #             print('failed')
+    try:
+        print("sending...")
+        response = requests.post(endpoint, headers=headers, json=payload)
+        print("sent (" + str(response.status_code) + "), status = " + str(wlan.status()) )
+        # Optionally print response content
+        try:
+            print(response.text)
+        except:
+            pass
+        response.close()
+    except Exception as e:
+        print("could not connect (status=" + str(wlan.status()) + ") error=" + str(e))
+        if wlan.status() <= 0 or wlan.status() >= 3:
+            print("trying to reconnect...")
+            try:
+                wlan.disconnect()
+            except:
+                pass
+            wlan.connect(config.WLAN_SSID, config.WLAN_PASSWORD)
+            if wlan.status() == 3:
+                print('connected')
+            else:
+                status = wlan.ifconfig()
+                print( 'ip = ' + status[0] )
 
-    time.sleep(10)
+                print('failed')
+
+    time.sleep(60)
+    # time.sleep(10)
+    # machine.deepsleep(60000)  # sleep 60 seconds
+    # machine.deepsleep(600000)  # sleep 600 seconds / 10 minutes
