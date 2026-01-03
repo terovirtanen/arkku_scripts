@@ -7,8 +7,8 @@ WLAN_SSID = 'your_wifi_ssid'
 WLAN_PASSWORD = 'your_wifi_password'
 
 # init scale values. Get manually from previous calibration run
-HX711_OFFSET = 400000.0
+HX711_OFFSET = 610000.0
 # smaller value, larger kg value
-REFERENCE_UNIT = 14.5
+REFERENCE_UNIT = 15.5
 
 DEBUG = True
