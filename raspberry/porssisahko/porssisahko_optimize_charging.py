@@ -269,9 +269,9 @@ def find_day_cheap_periods(price_data, night_avg_price, config, timezone):
         # Create periods covering the whole day (00:00 to 23:59)
         day_start = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
         day_end = now.replace(hour=23, minute=59, second=0, microsecond=0, tzinfo=None)
-        
+        current_period_prices = [(day_start, fixed_price)]
         # Return a single period covering the day with fixed price
-        return [(day_start, day_end, fixed_price, fixed_price)]
+        return [(day_start, day_end, fixed_price, current_period_prices)]
 
     # Find the night start time based on config
     night_start_time = now.replace(hour=night_start_hour, minute=0, second=0, microsecond=0, tzinfo=None)
