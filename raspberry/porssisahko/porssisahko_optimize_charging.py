@@ -28,7 +28,12 @@ def load_config():
         'cheap_price_limit': 1.0,    # Price limit for cheap periods (c/kWh)
         'night_start_hour': 22,      # Night starts at 22:00
         'night_end_hour': 8,         # Night ends at 08:00
-        'day_start_hour': 19         # Day period starts at 19:00
+        'day_start_hour': 19,        # Day period starts at 19:00
+
+        # fixed price periods
+        'fixed_price_date_start': '2026-1-1',  # '2024-12-24'
+        'fixed_price_date_end': '2026-3-31',   # '2024-12-24'
+        'fixed_price': 9.58                    # fixed price during period (c/kWh)
     }
     
     if not config['db_username'] or not config['db_password']:
@@ -234,6 +239,10 @@ def find_day_cheap_periods(price_data, night_avg_price, config, timezone):
     night_start_hour = config['night_start_hour'] #22
     night_end_hour = config['night_end_hour'] # 8
     day_start_hour = config['day_start_hour'] #19
+
+    fixed_price_date_start = config['fixed_price_date_start'] #2026-1-1
+    fixed_price_date_end = config['fixed_price_date_end'] #2026-3-31
+    fixed_price = config['fixed_price'] #9.58
     
     print(f"\nFinding day periods with configuration:")
     print(f"  Cheap price limit: {cheap_price_limit:.2f} c/kWh")
@@ -246,6 +255,23 @@ def find_day_cheap_periods(price_data, night_avg_price, config, timezone):
     current_period_prices = []
     
     now = datetime.now()
+
+    # if now is within fixed price period, return perisods covering whole day
+    # Parse fixed price dates
+    fixed_start = datetime.strptime(fixed_price_date_start, '%Y-%m-%d').date()
+    fixed_end = datetime.strptime(fixed_price_date_end, '%Y-%m-%d').date()
+    current_date = now.date()
+    
+    if fixed_start <= current_date <= fixed_end:
+        print(f"Current date is within fixed price period ({fixed_price_date_start} to {fixed_price_date_end})")
+        print("Returning periods covering whole day")
+        
+        # Create periods covering the whole day (00:00 to 23:59)
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+        day_end = now.replace(hour=23, minute=59, second=0, microsecond=0, tzinfo=None)
+        
+        # Return a single period covering the day with fixed price
+        return [(day_start, day_end, fixed_price, fixed_price)]
 
     # Find the night start time based on config
     night_start_time = now.replace(hour=night_start_hour, minute=0, second=0, microsecond=0, tzinfo=None)
