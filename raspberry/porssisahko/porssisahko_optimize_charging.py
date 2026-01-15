@@ -27,7 +27,7 @@ def load_config():
         # Day period configuration (hardcoded)
         'cheap_price_limit': 1.0,    # Price limit for cheap periods (c/kWh)
         'night_start_hour': 22,      # Night starts at 22:00
-        'night_end_hour': 8,         # Night ends at 08:00
+        'night_end_hour': 9,         # Night ends at 08:00
         'day_start_hour': 19,        # Day period starts at 19:00
 
         # fixed price periods
