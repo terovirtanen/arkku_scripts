@@ -184,7 +184,15 @@ python3 porssisahko_mqtt_publish.py
 
 # Kuuntele MQTT-viestejä (testaus)
 mosquitto_sub -h localhost -t "porssisahko/prices" -v
-```
+
+# Kaikki aiheet
+mosquitto_sub -h localhost -v -t "#"
+
+# Kaikki porssisahko-aiheiden alla
+mosquitto_sub -h localhost -v -t "porssisahko/#"
+
+# Yhden tason wildcard (+)
+mosquitto_sub -h localhost -v -t "porssisahko/+/prices"```
 
 ### Tulosteen muoto
 ```json
