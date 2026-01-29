@@ -17,8 +17,13 @@ import EPD_7in5_B
 print(dir(time))
 print(time.ticks_us())
 
+def debug_print(message):
+    """Print message if debug is True, otherwise do nothing."""
+    if config.debug:
+        print(message)
+
 def restart_and_reconnect():
-  print('Failed to connect to MQTT broker. Reconnecting...')
+  debug_print('Failed to connect to MQTT broker. Reconnecting...')
   time.sleep(10)
   machine.soft_reset()
 
@@ -58,17 +63,16 @@ def wlan_connect():
 
 
 def sub_cb(topic, msg):
-  print((topic, msg))
+  debug_print((topic, msg))
   if topic == config.mqtt_topic_outdoor_temperature:
-    print('Outdoor temperature received: %s °C' % msg.decode())
+    debug_print('Outdoor temperature received: %s °C' % msg.decode())
 
 def mqtt_connect_and_subscribe():
-  global client_id, mqtt_server, mqtt_topic
-  client = MQTTClient(client_id, mqtt_server, user=mqtt_user, password=mqtt_pass)
+  client = MQTTClient(config.client_id, config.mqtt_server, user=config.mqtt_user, password=config.mqtt_pass)
   client.set_callback(sub_cb)
   client.connect()
-  client.subscribe(mqtt_topic)
-  print('Connected to %s MQTT broker, subscribed to %s topic' % (mqtt_server, mqtt_topic))
+  client.subscribe(config.mqtt_topic)
+  debug_print('Connected to %s MQTT broker, subscribed to %s topic' % (config.mqtt_server, config.mqtt_topic))
   return client
 
 def listen_for_messages(client):
@@ -92,15 +96,35 @@ def epd_close(epd):
     epd.init()       
     epd.Clear()
     epd.delay_ms(2000)
-    print("sleep")
+    debug_print("sleep")
     epd.sleep()
-    print("close")
+    debug_print("close")
 
 if __name__=='__main__':
     try:
         wlan = wlan_connect()
         client = mqtt_connect_and_subscribe()
         epd = init_epd()
+
+        epd.imageblack.fill(0xff)
+        epd.imagered.fill(0x00)
+
+        epd.imageblack.text("Ulkolämpötila 15.5", 5, 10, 0x00)
+        epd.imagered.text("Sisälämpötila 22.3", 5, 40, 0xff)
+        epd.display()
+        epd.delay_ms(5000)
+
+        time.sleep(10)
+        epd.Clear()
+        epd.imageblack.fill(0xff)
+        epd.imagered.fill(0x00)
+
+        epd.imageblack.text("Ulkolämpötila 15.5", 5, 10, 0x00)
+        epd.imagered.text("Sisälämpötila 11.3", 5, 40, 0xff)
+        epd.display()
+        epd.delay_ms(5000)
+        time.sleep(10)
+
 
     except OSError as e:
         epd_close(epd)

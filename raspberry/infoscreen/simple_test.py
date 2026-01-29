@@ -16,6 +16,11 @@ import config
 print(dir(time))
 print(time.ticks_us())
 
+def debug_print(message):
+    """Print message if debug is True, otherwise do nothing."""
+    if debug:
+        print(message)
+
 def restart_and_reconnect():
   print('Failed to connect to MQTT broker. Reconnecting...')
   time.sleep(10)
@@ -62,12 +67,12 @@ def sub_cb(topic, msg):
     print('Outdoor temperature received: %s °C' % msg.decode())
 
 def mqtt_connect_and_subscribe():
-  global client_id, mqtt_server, mqtt_topic
-  client = MQTTClient(client_id, mqtt_server, user=mqtt_user, password=mqtt_pass)
+#   global client_id, mqtt_server, mqtt_topic
+  client = MQTTClient(config.client_id, config.mqtt_server, user=config.mqtt_user, password=config.mqtt_pass)
   client.set_callback(sub_cb)
   client.connect()
-  client.subscribe(mqtt_topic)
-  print('Connected to %s MQTT broker, subscribed to %s topic' % (mqtt_server, mqtt_topic))
+  client.subscribe(config.mqtt_topic)
+  print('Connected to %s MQTT broker, subscribed to %s topic' % (config.mqtt_server, config.mqtt_topic))
   return client
 
 def listen_for_messages(client):

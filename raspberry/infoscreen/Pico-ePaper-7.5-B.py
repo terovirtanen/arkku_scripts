@@ -372,6 +372,8 @@ if __name__=='__main__':
     epd.imagered.text("Pico_ePaper-7.5-B", 5, 40, 0xff)
     epd.imageblack.text("Raspberry Pico", 5, 70, 0x00)
     epd.display()
+    print("draw text")
+
     epd.delay_ms(5000)
     
     epd.imageblack.vline(10, 90, 60, 0x00)
