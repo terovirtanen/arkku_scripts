@@ -61,6 +61,12 @@ Date: 2021-05-27
 from machine import Pin, SPI
 import framebuf
 import utime
+import framebuf2 as fb2
+
+# Unicode (ä/ö) support via peterhinch's writer
+# https://github.com/peterhinch/micropython-font-to-py/blob/master/writer/writer_tests.py
+from writer import Writer
+import font10 as tempfont  # Adjust to your generated font module
 
 # Display resolution
 EPD_WIDTH       = 800
@@ -69,11 +75,76 @@ EPD_HEIGHT      = 480
 EPD_WIDTH_WIN1  = 160
 EPD_HEIGHT_WIN1 = 80
 
-
 RST_PIN         = 12
 DC_PIN          = 8
 CS_PIN          = 9
 BUSY_PIN        = 13
+
+class FrameWindow:
+    def __init__(self, epd, Xstart, Ystart, Xend, Yend):
+        if (Xend > EPD_WIDTH or Yend > EPD_HEIGHT):
+            raise ValueError("FrameWindow exceeds display dimensions")
+
+        self.epd = epd
+        self.Xstart = Xstart
+        self.Ystart = Ystart
+        self.Xend = Xend
+        self.Yend = Yend
+
+        self.width = Xend - Xstart
+        self.height = Yend - Ystart
+
+        if (self.width % 8 != 0):
+            raise ValueError("width must be multiple of 8 for byte alignment!")
+
+        self.buffer_black = bytearray(self.height * self.width // 8)
+        self.buffer_red = bytearray(self.height * self.width // 8)
+        self.imageblack = framebuf.FrameBuffer(self.buffer_black, self.width, self.height, framebuf.MONO_HLSB)
+        self.imagered = framebuf.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
+
+    def display(self):
+        self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
+
+class TempereratureWindow(FrameWindow):
+    # Top-right quarter of the full display
+    WIDTH = EPD_WIDTH // 2
+    HEIGHT = EPD_HEIGHT // 2
+    XSTART = EPD_WIDTH // 2
+    YSTART = 0
+    XEND = EPD_WIDTH
+    YEND = EPD_HEIGHT // 2
+
+    def __init__(self, epd):
+        # Use class defaults for the top-right quarter
+        Xstart = self.XSTART
+        Ystart = self.YSTART
+        Xend = self.XEND
+        Yend = self.YEND
+
+        super().__init__(epd, Xstart, Ystart, Xend, Yend)
+        # Initialize window contents (labels)
+        self.init()
+
+    def init(self):
+        # Prepare window: white background on both layers
+        self.imageblack.fill(0xff)
+        self.imagered.fill(0xff)
+
+        # Header in red at 2x size using framebuf2
+        fb2_red = fb2.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
+        fb2_red.large_text("Lämpötilat", 10, 10, 2, 1)
+
+        w_blk = Writer(self.imageblack, tempfont, verbose=False)
+        Writer.set_textpos(self.imageblack, 10, 40)
+        w_blk.printstring("ulkona")
+        Writer.set_textpos(self.imageblack, 10, 70)
+        w_blk.printstring("ulkorakennus")
+        Writer.set_textpos(self.imageblack, 10, 100)
+        w_blk.printstring("autotalli")
+
+    def display(self):
+        # Partial update for both layers (black + red)
+        self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
 
 class EPD_7in5_B:
     def __init__(self):
@@ -408,7 +479,7 @@ class EPD_7in5_B:
 # Xstart: 8 Xend: 169 Ystart: 10 Yend: 90
 # Width: 20 Height: 80
 
-    def display_Partial_Both(self, ImageBlack, ImageRed, Xstart, Ystart, Xend, Yend):
+    def display_Partial_Both(self, BufferBlack, BufferRed, Xstart, Ystart, Xend, Yend):
         # Robust 8px horizontal alignment
         Xstart = (Xstart // 8) * 8
         Xend = ((Xend + 7) // 8) * 8
@@ -439,14 +510,14 @@ class EPD_7in5_B:
         for i in range(0, Width):
             col = x_index_start + i
             base = col * self.height
-            self.send_data1(ImageBlack[(base + Ystart) : (base + Yend)])
+            self.send_data1(BufferBlack[(base + Ystart) : (base + Yend)])
 
         # write red layer
         self.send_command(0x13)
         for i in range(0, Width):
             col = x_index_start + i
             base = col * self.height
-            self.send_data1(ImageRed[(base + Ystart) : (base + Yend)])
+            self.send_data1(BufferRed[(base + Ystart) : (base + Yend)])
 
         # single refresh for both layers
         self.send_command(0x12)
@@ -523,9 +594,19 @@ if __name__=='__main__':
     epd.display_Base_color(0xFF)
     epd.init_part()
 
+    # Demo: top-right temperature window
+    win_temp = TempereratureWindow(epd)
+    win_temp.display()
+
+    win2 = FrameWindow(epd, 400, 240, 800, 480)
 
     for i in range(0, 4):
         print("partial loop")
+        win2.imageblack.fill_rect(40, 40, 10, 20, 0xff)
+        epd.imageblack.text(str(i), 41, 41, 0x00)
+        epd.imagered.text("win 2", 200, 100, 0xff)
+        win2.display()
+
         epd.imageblack_win1.fill_rect(0, 0, 10, 20, 0xff)
         epd.imageblack_win1.fill_rect(0, 30, 10, 20, 0x00)
 
