@@ -4,6 +4,28 @@
 
 # text, line, rectangle, circle, ellipse, polygon, arc
 # https://docs.micropython.org/en/latest/library/framebuf.html
+# lähdekoodi
+# https://github.com/micropython/micropython/blob/master/extmod/modframebuf.c
+
+# isompi fontti
+# https://github.com/peter-l5/framebuf2
+
+# ääkköset saa toimimaan tällö (ei testattu):
+# https://github.com/peterhinch/micropython-font-to-py
+
+# Lataa writer.py ja siirrä se laitteesi muistiin.
+# Hanki fontti: Kirjasto vaatii fontin Python-muodossa. Löydät valmiita esimerkkifontteja (sisältäen ääkköset) täältä.
+# Käyttö:
+# python
+
+# from writer import Writer
+# import my_font_file  # Valmiiksi käännetty fonttitiedosto
+
+# # Alustus (fb = sinun framebuf-oliosi)
+# wri = Writer(fb, my_font_file)
+# wri.set_textpos(0, 0)
+# wri.printstring("Ääkköset toimivat!")
+# fb.show()
 
 
 from umqtt.simple import MQTTClient
@@ -19,7 +41,7 @@ print(time.ticks_us())
 
 def debug_print(message):
     """Print message if debug is True, otherwise do nothing."""
-    if config.debug:
+    if config.DEBUG:
         print(message)
 
 def restart_and_reconnect():
@@ -99,6 +121,17 @@ def epd_close(epd):
     debug_print("sleep")
     epd.sleep()
     debug_print("close")
+
+def epd_draw_corners(epd):
+    # partial update
+    epd.init()
+    epd.imageblack.fill(0xff)
+    epd.display_Base_color(0xFF)
+    epd.init_part()
+    for i in range(0, 10):
+        epd.imageblack.fill_rect(175, 105, 10, 10, 0xff)
+        epd.imageblack.text(str(i), 177, 106, 0x00)
+        epd.display_Partial(epd.buffer_black, 0, 0, 800, 480)
 
 if __name__=='__main__':
     try:

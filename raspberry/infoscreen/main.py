@@ -1,35 +1,4 @@
 # *****************************************************************************
-"""
-Waveshare 7.5 inch e-Paper display driver for Raspberry Pi Pico.
-This module provides a driver class for controlling the Waveshare 7.5 inch 
-three-color (Black/White/Red) e-Paper display module using MicroPython on 
-Raspberry Pi Pico.
-Classes:
-    EPD_7in5_B: Main driver class for the 7.5 inch e-Paper display.
-Constants:
-    EPD_WIDTH: Display width in pixels (800)
-    EPD_HEIGHT: Display height in pixels (480)
-    RST_PIN: GPIO pin number for reset (12)
-    DC_PIN: GPIO pin number for data/command selection (8)
-    CS_PIN: GPIO pin number for SPI chip select (9)
-    BUSY_PIN: GPIO pin number for busy status (13)
-The EPD_7in5_B class provides methods for:
-    - Hardware initialization and reset
-    - Full display updates (black and red layers)
-    - Partial display updates for faster refresh
-    - Display clearing (white, black, or red)
-    - Drawing text and graphics using framebuf
-    - Low power sleep mode
-Example usage:
-    epd.imageblack.text("Hello", 5, 10, 0x00)
-    epd.imagered.text("World", 5, 40, 0xff)
-Note: This driver uses SPI communication and requires proper wiring of the
-display module to the Raspberry Pi Pico according to the pin definitions.
-License: MIT License
-Author: Waveshare team
-Version: V1.0
-Date: 2021-05-27
-"""
 # * | File        :	  Pico_ePaper-7.5-B.py
 # * | Author      :   Waveshare team
 # * | Function    :   Electronic paper driver
@@ -66,10 +35,6 @@ import utime
 EPD_WIDTH       = 800
 EPD_HEIGHT      = 480
 
-EPD_WIDTH_WIN1  = 160
-EPD_HEIGHT_WIN1 = 80
-
-
 RST_PIN         = 12
 DC_PIN          = 8
 CS_PIN          = 9
@@ -94,15 +59,6 @@ class EPD_7in5_B:
         self.buffer_red = bytearray(self.height * self.width // 8)
         self.imageblack = framebuf.FrameBuffer(self.buffer_black, self.width, self.height, framebuf.MONO_HLSB)
         self.imagered = framebuf.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
-
-        self.width_win1 = EPD_WIDTH_WIN1
-        self.height_win1 = EPD_HEIGHT_WIN1
-
-        self.buffer_black_win1 = bytearray(self.height_win1 * self.width_win1 // 8)
-        self.buffer_red_win1 = bytearray(self.height_win1 * self.width_win1 // 8)
-        self.imageblack_win1 = framebuf.FrameBuffer(self.buffer_black_win1, self.width_win1, self.height_win1, framebuf.MONO_HLSB )
-        self.imagered_win1 = framebuf.FrameBuffer(self.buffer_red_win1, self.width_win1, self.height_win1, framebuf.MONO_HLSB )
-
         self.init()
 
     def digital_write(self, pin, value):
@@ -318,7 +274,7 @@ class EPD_7in5_B:
             wide =  self.width // 8
         else :
             wide =  self.width // 8 + 1
-        print("dispaly, wide:", wide, "high:", high)
+        
         # send black data
         self.send_command(0x10) 
         for i in range(0, wide):
@@ -365,9 +321,7 @@ class EPD_7in5_B:
                 
         Width = (Xend - Xstart) // 8
         Height = Yend - Ystart
-
-        print("Xstart:", Xstart, "Xend:", Xend, "Ystart:", Ystart, "Yend:", Yend)
-        print("Width:", Width, "Height:", Height)
+	
         # self.send_command(0x50)
         # self.send_data(0xA9)
         # self.send_data(0x07)
@@ -377,14 +331,14 @@ class EPD_7in5_B:
         self.send_data (Xstart//256)
         self.send_data (Xstart%256)   #x-start    
 
-        self.send_data ((Xend -1)//256)		
-        self.send_data ((Xend -1)%256)  #x-end	
+        self.send_data ((Xend-1)//256)		
+        self.send_data ((Xend-1)%256)  #x-end	
 
         self.send_data (Ystart//256)  #
         self.send_data (Ystart%256)   #y-start    
 
-        self.send_data ((Yend -1)//256)		
-        self.send_data ((Yend -1)%256)  #y-end
+        self.send_data ((Yend-1)//256)		
+        self.send_data ((Yend-1)%256)  #y-end
         self.send_data (0x01)
 
         if self.partFlag == 1:
@@ -395,60 +349,8 @@ class EPD_7in5_B:
 
         self.send_command(0x13)   #Write Black and White image to RAM
         for i in range(0, Width):
-            # self.send_data1(Image[(i * Height) : ((i+1) * Height)])
-            self.send_data1(self.buffer_black_win1[(i * Height) : ((i+1) * Height)])
+            self.send_data1(Image[(i * Height) : ((i+1) * Height)])
 
-        self.send_command(0x12)
-        self.delay_ms(100)
-        self.WaitUntilIdle()
-
-# lokista
-# dispaly, wide: 100 high: 480
-# partial loop
-# Xstart: 8 Xend: 169 Ystart: 10 Yend: 90
-# Width: 20 Height: 80
-
-    def display_Partial_Both(self, ImageBlack, ImageRed, Xstart, Ystart, Xend, Yend):
-        # Robust 8px horizontal alignment
-        Xstart = (Xstart // 8) * 8
-        Xend = ((Xend + 7) // 8) * 8
-        Width = (Xend - Xstart) // 8
-        Height = Yend - Ystart
-
-        self.send_command(0x91)     # enter partial mode
-        self.send_command(0x90)     # window setting
-        self.send_data (Xstart//256)
-        self.send_data (Xstart%256)
-        self.send_data ((Xend-1)//256)
-        self.send_data ((Xend-1)%256)
-        self.send_data (Ystart//256)
-        self.send_data (Ystart%256)
-        self.send_data ((Yend-1)//256)
-        self.send_data ((Yend-1)%256)
-        self.send_data (0x01)
-
-        if self.partFlag == 1:
-            self.partFlag = 0
-            self.send_command(0x10)
-            for i in range(0, Width):
-                self.send_data1([0xFF] * Height)
-
-        # write black layer
-        self.send_command(0x10)
-        x_index_start = Xstart // 8
-        for i in range(0, Width):
-            col = x_index_start + i
-            base = col * self.height
-            self.send_data1(ImageBlack[(base + Ystart) : (base + Yend)])
-
-        # write red layer
-        self.send_command(0x13)
-        for i in range(0, Width):
-            col = x_index_start + i
-            base = col * self.height
-            self.send_data1(ImageRed[(base + Ystart) : (base + Yend)])
-
-        # single refresh for both layers
         self.send_command(0x12)
         self.delay_ms(100)
         self.WaitUntilIdle()
@@ -463,103 +365,52 @@ if __name__=='__main__':
     epd = EPD_7in5_B()
     epd.Clear()
     
-    # epd.imageblack.fill(0xff)
-    # print("fill black")
-    # epd.imagered.fill(0x00)
-    # print("fill red")
+    epd.imageblack.fill(0xff)
+    epd.imagered.fill(0x00)
     
-    # epd.imageblack.text("Waveshare", 5, 10, 0x00)
-    # print("draw text 1")
-    # epd.imagered.text("Pico_ePaper-7.5-B", 5, 40, 0xff)
-    # print("draw text 2")
-    # epd.imageblack.text("Raspberry Pico", 5, 70, 0x00)
-    # print("draw text 3")
-    # epd.display()
-    # print("display")
+    epd.imageblack.text("Waveshare", 5, 10, 0x00)
+    epd.imagered.text("Pico_ePaper-7.5-B", 5, 40, 0xff)
+    epd.imageblack.text("Raspberry Pico", 5, 70, 0x00)
+    epd.display()
+    print("draw text")
 
-    # epd.delay_ms(5000)
-
-    # Base color examples: full white, then full red
-    # print("base color examples")
-    # epd.init()
-    # epd.display_Base_color(0xFF)  # set base to white
-    # epd.TurnOnDisplay()
-    # epd.delay_ms(2000)
-    # epd.display_Base_color(0x00)  # set base to red
-    # epd.TurnOnDisplay()
-    # epd.delay_ms(2000)
+    epd.delay_ms(5000)
     
-    # epd.imageblack.vline(10, 90, 60, 0x00)
-    # epd.imageblack.vline(120, 90, 60, 0x00)
-    # epd.imagered.hline(10, 90, 110, 0xff)
-    # epd.imagered.hline(10, 150, 110, 0xff)
-    # epd.imagered.line(10, 90, 120, 150, 0xff)
-    # epd.imagered.line(120, 90, 10, 150, 0xff)
-    # epd.display()
-    # epd.delay_ms(5000)
+    epd.imageblack.vline(10, 90, 60, 0x00)
+    epd.imageblack.vline(120, 90, 60, 0x00)
+    epd.imagered.hline(10, 90, 110, 0xff)
+    epd.imagered.hline(10, 150, 110, 0xff)
+    epd.imagered.line(10, 90, 120, 150, 0xff)
+    epd.imagered.line(120, 90, 10, 150, 0xff)
+    epd.display()
+    epd.delay_ms(5000)
     
-    # epd.imageblack.rect(10, 180, 50, 80, 0x00 )
-    # epd.imageblack.fill_rect(70, 180, 50, 80,0x00 )
-    # epd.imagered.rect(10, 300, 50, 80, 0xff )
-    # epd.imagered.fill_rect(70, 300, 50, 80,0xff )
-    # epd.display()
-    # epd.delay_ms(5000)
+    epd.imageblack.rect(10, 180, 50, 80, 0x00 )
+    epd.imageblack.fill_rect(70, 180, 50, 80,0x00 )
+    epd.imagered.rect(10, 300, 50, 80, 0xff )
+    epd.imagered.fill_rect(70, 300, 50, 80,0xff )
+    epd.display()
+    epd.delay_ms(5000)
 
-    # for k in range(0, 3):
-    #     for j in range(0, 3):
-    #         for i in range(0, 5):
-    #             epd.imageblack.fill_rect(200+100+j*200, i*20+k*200, 100, 10, 0x00)
-    #         for i in range(0, 5):
-    #             epd.imagered.fill_rect(200+0+j*200, i*20+100+k*200, 100, 10, 0xff)
-    # epd.display()
-    # epd.delay_ms(5000)
+    for k in range(0, 3):
+        for j in range(0, 3):
+            for i in range(0, 5):
+                epd.imageblack.fill_rect(200+100+j*200, i*20+k*200, 100, 10, 0x00)
+            for i in range(0, 5):
+                epd.imagered.fill_rect(200+0+j*200, i*20+100+k*200, 100, 10, 0xff)
+    epd.display()
+    epd.delay_ms(5000)
 
     # partial update
-    print("partial start")
     epd.init()
-    epd.imageblack_win1.fill(0xff)
-    # epd.imageblack.fill(0xff)
-    # epd.imagered.fill(0x00)
+    epd.imageblack.fill(0xff)
     epd.display_Base_color(0xFF)
     epd.init_part()
-
-
-    for i in range(0, 4):
-        print("partial loop")
-        epd.imageblack_win1.fill_rect(0, 0, 10, 20, 0xff)
-        epd.imageblack_win1.fill_rect(0, 30, 10, 20, 0x00)
-
-        epd.imageblack_win1.fill_rect(40, 40, 10, 20, 0xff)
-        epd.imageblack_win1.text(str(i), 41, 41, 0x00)
-
-        # epd.imageblack_win1.text(str(i), 20, 80, 0x00)
-        # epd.imageblack_win1.text(str(i+20), 2, 2, 0x00)
-        # epd.imageblack_win1.pixel(30, 30, 0xff)
-        # epd.imageblack_win1.pixel(31, 30, 0xff)
-        # epd.imageblack_win1.pixel(30, 31, 0xff)
-        # epd.imageblack_win1.pixel(31, 31, 0x00)
-        # epd.display_Partial(epd.buffer_black, 0, 0, 800, 480)
-        # epd.display_Partial(epd.buffer_black_win1, 10, 10, 170, 90)
-        epd.display_Partial(epd.buffer_black_win1, 0, 0, 160, 80)
-
-        # epd.imageblack.fill_rect(175, 105, 100, 20, 0xff)
-        # epd.imageblack.text(str(i), 177, 106, 0x00)
-        # epd.imageblack.text(str(i+20), 2, 2, 0x00)
-        # # epd.display_Partial(epd.buffer_black, 0, 0, 800, 480)
-        # epd.display_Partial(epd.buffer_black, 10, 10, 200, 200)
-
-        # epd.imagered.fill_rect(375, 105, 100, 20, 0x00)
-        # epd.imagered.text("pidempi teksti", 386, 116, 0xff) # tämähän ei toimi ?
-        # epd.display_Partial(epd.buffer_red, 0, 0, 800, 480)
-        # Päivitä vain uudet alueet (pyöristetty 8 pikselin tarkkuuteen)
-        # Musta alue (rect + teksti)
-        # epd.display_Partial_Both(epd.buffer_black, epd.buffer_red, 168, 96, 280, 132)
-        # Punainen alue (rect + teksti)
-        # epd.display_Partial_Both(epd.buffer_black, epd.buffer_red, 0, 0, 800, 480)
-        print("partial loop end")
-        epd.delay_ms(5000)
+    for i in range(0, 10):
+        epd.imageblack.fill_rect(175, 105, 10, 10, 0xff)
+        epd.imageblack.text(str(i), 177, 106, 0x00)
+        epd.display_Partial(epd.buffer_black, 0, 0, 800, 480)
             
-    print("shutdown")
     epd.init()       
     epd.Clear()
     epd.delay_ms(2000)
