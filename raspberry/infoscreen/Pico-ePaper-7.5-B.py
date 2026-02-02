@@ -59,14 +59,25 @@ Date: 2021-05-27
 #
 
 from machine import Pin, SPI
-import framebuf
+# import framebuf
 import utime
-import framebuf2 as fb2
+# import framebuf2 as fb2
+import framebuf2 as framebuf
 
 # Unicode (ä/ö) support via peterhinch's writer
 # https://github.com/peterhinch/micropython-font-to-py/blob/master/writer/writer_tests.py
 from writer import Writer
 import font10 as tempfont  # Adjust to your generated font module
+
+# Optional: sync RTC from NTP (requires Wi‑Fi connection)
+def try_ntp_sync():
+    try:
+        import ntptime
+        ntptime.settime()  # sets RTC to UTC
+        print("NTP-aika synkronoitu (UTC)")
+    except Exception as e:
+        # No Wi‑Fi or NTP unavailable — continue with current RTC
+        print("NTP-synkronointi epäonnistui:", e)
 
 # Display resolution
 EPD_WIDTH       = 800
@@ -79,6 +90,35 @@ RST_PIN         = 12
 DC_PIN          = 8
 CS_PIN          = 9
 BUSY_PIN        = 13
+
+try:
+    import ujson as json
+except ImportError:
+    import json
+
+def props_as_dict(obj, include_private=True):
+    out = {}
+    names = getattr(obj, "__dict__", None)
+    names = list(names.keys()) if names else dir(obj)
+    for n in names:
+        if not include_private and str(n).startswith('_'):
+            continue
+        try:
+            v = getattr(obj, n)
+            if callable(v):
+                out[n] = "<callable>"
+            elif isinstance(v, (bytes, bytearray)):
+                out[n] = "<%s len=%d>" % (type(v).__name__, len(v))
+            else:
+                # yritä tehdä JSON-kelpoinen, muuten repr
+                try:
+                    json.dumps(v)
+                    out[n] = v
+                except Exception:
+                    out[n] = repr(v)
+        except Exception as e:
+            out[n] = "<error: %s>" % e
+    return out
 
 class FrameWindow:
     def __init__(self, epd, Xstart, Ystart, Xend, Yend):
@@ -103,7 +143,10 @@ class FrameWindow:
         self.imagered = framebuf.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
 
     def display(self):
-        self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        print("FrameWindow display")
+        # self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
+
 
 class TempereratureWindow(FrameWindow):
     # Top-right quarter of the full display
@@ -128,23 +171,27 @@ class TempereratureWindow(FrameWindow):
     def init(self):
         # Prepare window: white background on both layers
         self.imageblack.fill(0xff)
-        self.imagered.fill(0xff)
+        self.imagered.fill(0x00)
 
         # Header in red at 2x size using framebuf2
-        fb2_red = fb2.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
-        fb2_red.large_text("Lämpötilat", 10, 10, 2, 1)
+        # fb2_red = fb2.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
+        self.imagered.large_text("Lämpötilat", 10, 10, 2, 1)
+        self.imageblack.text("ulkona lämpö", 10, 40, 0x00)
+        self.imageblack.text("ulkorakennus", 10, 70, 0x00)
+        self.imageblack.text("autotalli", 10, 100, 0x00)
 
         w_blk = Writer(self.imageblack, tempfont, verbose=False)
-        Writer.set_textpos(self.imageblack, 10, 40)
-        w_blk.printstring("ulkona")
-        Writer.set_textpos(self.imageblack, 10, 70)
-        w_blk.printstring("ulkorakennus")
-        Writer.set_textpos(self.imageblack, 10, 100)
-        w_blk.printstring("autotalli")
+        Writer.set_textpos(self.imageblack, 10, 140)
+        w_blk.printstring("ääkköset")
+        # Writer.set_textpos(self.imageblack, 10, 70)
+        # w_blk.printstring("ulkorakennus")
+        # Writer.set_textpos(self.imageblack, 10, 100)
+        # w_blk.printstring("autotalli")
 
     def display(self):
-        # Partial update for both layers (black + red)
+        print("TempereratureWindow display")
         self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        # self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
 
 class EPD_7in5_B:
     def __init__(self):
@@ -173,6 +220,11 @@ class EPD_7in5_B:
         self.buffer_red_win1 = bytearray(self.height_win1 * self.width_win1 // 8)
         self.imageblack_win1 = framebuf.FrameBuffer(self.buffer_black_win1, self.width_win1, self.height_win1, framebuf.MONO_HLSB )
         self.imagered_win1 = framebuf.FrameBuffer(self.buffer_red_win1, self.width_win1, self.height_win1, framebuf.MONO_HLSB )
+
+
+        d = props_as_dict(self.imageblack_win1)
+        print(json.dumps(d)) 
+        print(self.imageblack_win1.height)
 
         self.init()
 
@@ -423,7 +475,7 @@ class EPD_7in5_B:
         # self.WaitUntilIdle()
         
         
-    def display_Partial(self, Image, Xstart, Ystart, Xend, Yend):
+    def display_Partial(self, Buffer, Xstart, Ystart, Xend, Yend):
         if((Xstart % 8 + Xend % 8 == 8 & Xstart % 8 > Xend % 8) | Xstart % 8 + Xend % 8 == 0 | (Xend - Xstart)%8 == 0):
             Xstart = Xstart // 8 * 8
             Xend = Xend // 8 * 8
@@ -467,7 +519,7 @@ class EPD_7in5_B:
         self.send_command(0x13)   #Write Black and White image to RAM
         for i in range(0, Width):
             # self.send_data1(Image[(i * Height) : ((i+1) * Height)])
-            self.send_data1(self.buffer_black_win1[(i * Height) : ((i+1) * Height)])
+            self.send_data1(Buffer[(i * Height) : ((i+1) * Height)])
 
         self.send_command(0x12)
         self.delay_ms(100)
@@ -480,9 +532,16 @@ class EPD_7in5_B:
 # Width: 20 Height: 80
 
     def display_Partial_Both(self, BufferBlack, BufferRed, Xstart, Ystart, Xend, Yend):
-        # Robust 8px horizontal alignment
-        Xstart = (Xstart // 8) * 8
-        Xend = ((Xend + 7) // 8) * 8
+        if((Xstart % 8 + Xend % 8 == 8 & Xstart % 8 > Xend % 8) | Xstart % 8 + Xend % 8 == 0 | (Xend - Xstart)%8 == 0):
+            Xstart = Xstart // 8 * 8
+            Xend = Xend // 8 * 8
+        else:
+            Xstart = Xstart // 8 * 8
+            if Xend % 8 == 0:
+                Xend = Xend // 8 * 8
+            else:
+                Xend = Xend // 8 * 8 + 1
+                
         Width = (Xend - Xstart) // 8
         Height = Yend - Ystart
 
@@ -506,18 +565,13 @@ class EPD_7in5_B:
 
         # write black layer
         self.send_command(0x10)
-        x_index_start = Xstart // 8
         for i in range(0, Width):
-            col = x_index_start + i
-            base = col * self.height
-            self.send_data1(BufferBlack[(base + Ystart) : (base + Yend)])
+            self.send_data1(BufferBlack[(i * Height) : ((i+1) * Height)])
 
         # write red layer
         self.send_command(0x13)
         for i in range(0, Width):
-            col = x_index_start + i
-            base = col * self.height
-            self.send_data1(BufferRed[(base + Ystart) : (base + Yend)])
+            self.send_data1(BufferRed[(i * Height) : ((i+1) * Height)])
 
         # single refresh for both layers
         self.send_command(0x12)
@@ -531,22 +585,29 @@ class EPD_7in5_B:
         self.send_data(0xa5)
 
 if __name__=='__main__':
+    # Try to sync time from NTP, then print UTC and Finland time (UTC+2 winter)
+    # try_ntp_sync()
+    _utc = utime.localtime()
+    print("Local-aika: %04d-%02d-%02d %02d:%02d:%02d" % (_utc[0], _utc[1], _utc[2], _utc[3], _utc[4], _utc[5]))
+    # _fi = utime.localtime(utime.time() + 2*3600)
+    # print("Nykyinen aika (UTC+2): %04d-%02d-%02d %02d:%02d:%02d" % (_fi[0], _fi[1], _fi[2], _fi[3], _fi[4], _fi[5]))
+
     epd = EPD_7in5_B()
     epd.Clear()
     
-    # epd.imageblack.fill(0xff)
-    # print("fill black")
-    # epd.imagered.fill(0x00)
-    # print("fill red")
+    epd.imageblack.fill(0xff)
+    print("fill black")
+    epd.imagered.fill(0x00)
+    print("fill red")
     
-    # epd.imageblack.text("Waveshare", 5, 10, 0x00)
-    # print("draw text 1")
-    # epd.imagered.text("Pico_ePaper-7.5-B", 5, 40, 0xff)
-    # print("draw text 2")
-    # epd.imageblack.text("Raspberry Pico", 5, 70, 0x00)
-    # print("draw text 3")
-    # epd.display()
-    # print("display")
+    epd.imageblack.text("Waveshare", 5, 10, 0x00)
+    print("draw text 1")
+    epd.imagered.text("Pico_ePaper-7.5-B", 5, 40, 0xff)
+    print("draw text 2")
+    epd.imageblack.text("Raspberry Pico", 5, 70, 0x00)
+    print("draw text 3")
+    epd.display()
+    print("display")
 
     # epd.delay_ms(5000)
 
@@ -587,6 +648,9 @@ if __name__=='__main__':
 
     # partial update
     print("partial start")
+
+
+    
     epd.init()
     epd.imageblack_win1.fill(0xff)
     # epd.imageblack.fill(0xff)
@@ -602,9 +666,10 @@ if __name__=='__main__':
 
     for i in range(0, 4):
         print("partial loop")
+        win2.imageblack.fill(0xff)
         win2.imageblack.fill_rect(40, 40, 10, 20, 0xff)
-        epd.imageblack.text(str(i), 41, 41, 0x00)
-        epd.imagered.text("win 2", 200, 100, 0xff)
+        win2.imageblack.text(str(i), 41, 41, 0x00)
+        win2.imagered.text("win 2", 200, 100, 0x00)
         win2.display()
 
         epd.imageblack_win1.fill_rect(0, 0, 10, 20, 0xff)
@@ -621,7 +686,7 @@ if __name__=='__main__':
         # epd.imageblack_win1.pixel(31, 31, 0x00)
         # epd.display_Partial(epd.buffer_black, 0, 0, 800, 480)
         # epd.display_Partial(epd.buffer_black_win1, 10, 10, 170, 90)
-        epd.display_Partial(epd.buffer_black_win1, 0, 0, 160, 80)
+        epd.display_Partial(epd.buffer_black_win1, 0, 200, 160, 280)
 
         # epd.imageblack.fill_rect(175, 105, 100, 20, 0xff)
         # epd.imageblack.text(str(i), 177, 106, 0x00)
