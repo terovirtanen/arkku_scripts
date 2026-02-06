@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # *****************************************************************************
 """
 Waveshare 7.5 inch e-Paper display driver for Raspberry Pi Pico.
@@ -67,7 +68,7 @@ import framebuf2 as framebuf
 # Unicode (ä/ö) support via peterhinch's writer
 # https://github.com/peterhinch/micropython-font-to-py/blob/master/writer/writer_tests.py
 from writer import Writer
-import font10 as tempfont  # Adjust to your generated font module
+import font10_fi as tempfont  # Use Finnish charset font
 
 # Optional: sync RTC from NTP (requires Wi‑Fi connection)
 def try_ntp_sync():
@@ -90,35 +91,6 @@ RST_PIN         = 12
 DC_PIN          = 8
 CS_PIN          = 9
 BUSY_PIN        = 13
-
-try:
-    import ujson as json
-except ImportError:
-    import json
-
-def props_as_dict(obj, include_private=True):
-    out = {}
-    names = getattr(obj, "__dict__", None)
-    names = list(names.keys()) if names else dir(obj)
-    for n in names:
-        if not include_private and str(n).startswith('_'):
-            continue
-        try:
-            v = getattr(obj, n)
-            if callable(v):
-                out[n] = "<callable>"
-            elif isinstance(v, (bytes, bytearray)):
-                out[n] = "<%s len=%d>" % (type(v).__name__, len(v))
-            else:
-                # yritä tehdä JSON-kelpoinen, muuten repr
-                try:
-                    json.dumps(v)
-                    out[n] = v
-                except Exception:
-                    out[n] = repr(v)
-        except Exception as e:
-            out[n] = "<error: %s>" % e
-    return out
 
 class FrameWindow:
     def __init__(self, epd, Xstart, Ystart, Xend, Yend):
@@ -147,9 +119,9 @@ class FrameWindow:
         # self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
         self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
 
-
 class TempereratureWindow(FrameWindow):
     # Top-right quarter of the full display
+
     WIDTH = EPD_WIDTH // 2
     HEIGHT = EPD_HEIGHT // 2
     XSTART = EPD_WIDTH // 2
@@ -177,16 +149,22 @@ class TempereratureWindow(FrameWindow):
         # fb2_red = fb2.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
         self.imagered.large_text("Lämpötilat", 10, 10, 2, 1)
         self.imageblack.text("ulkona lämpö", 10, 40, 0x00)
-        self.imageblack.text("ulkorakennus", 10, 70, 0x00)
+        self.imagered.text("ulkorakennus", 10, 70, 0x00)
         self.imageblack.text("autotalli", 10, 100, 0x00)
 
-        w_blk = Writer(self.imageblack, tempfont, verbose=False)
-        Writer.set_textpos(self.imageblack, 10, 140)
-        w_blk.printstring("ääkköset")
+        w_blk = Writer(self.imageblack, tempfont, verbose=True)
+        Writer.set_textpos(self.imageblack, 140, 10)
+        # Testaa kaikki suomen erikoismerkit: ä ö Ä Ö å Å
+        w_blk.printstring("äöÄÖåÅ — ääkköset")
         # Writer.set_textpos(self.imageblack, 10, 70)
         # w_blk.printstring("ulkorakennus")
         # Writer.set_textpos(self.imageblack, 10, 100)
         # w_blk.printstring("autotalli")
+        # Header in red using Writer (supports Unicode)
+        w_red = Writer(self.imagered, tempfont)
+        Writer.set_textpos(self.imagered, 140, 200)
+        w_red.printstring("Lämpötilat")
+
 
     def display(self):
         print("TempereratureWindow display")
@@ -574,15 +552,48 @@ class EPD_7in5_B:
             self.send_data1(BufferRed[(i * Height) : ((i+1) * Height)])
 
         # single refresh for both layers
-        self.send_command(0x12)
-        self.delay_ms(100)
-        self.WaitUntilIdle()
+        # self.send_command(0x12)
+        # self.delay_ms(100)
+        # self.WaitUntilIdle()
+        self.TurnOnDisplay()
 
     def sleep(self):
         self.send_command(0x02) # power off
         self.WaitUntilIdle()
         self.send_command(0x07) # deep sleep
         self.send_data(0xa5)
+
+
+def show_finnish_test_page(epd):
+    # Full-screen Finnish glyph verification for both layers
+    epd.init()
+    epd.imageblack.fill(0xff)
+    epd.imagered.fill(0x00)
+
+    w_black = Writer(epd.imageblack, tempfont, verbose=False)
+    w_red = Writer(epd.imagered, tempfont, verbose=False)
+
+    # Title in red
+    Writer.set_textpos(epd.imagered, 10, 10)
+    w_red.printstring("Suomi-testisivu: äöÄÖåÅ — äkköset")
+
+    # Black layer lines
+    Writer.set_textpos(epd.imageblack, 40, 10)
+    w_black.printstring("Perus: abcdefghijklmnopqrstuvwxyz åäö")
+    Writer.set_textpos(epd.imageblack, 60, 10)
+    w_black.printstring("Kapiteelit: ABCDEFGHIJKLMNOPQRSTUVWXYZ ÅÄÖ")
+    Writer.set_textpos(epd.imageblack, 80, 10)
+    w_black.printstring("Numerot: 0123456789")
+    Writer.set_textpos(epd.imageblack, 100, 10)
+    w_black.printstring("Välimerkit: .,:;!?()[]{}-–— ‘’ “” @&%#")
+
+    # Red layer lines
+    Writer.set_textpos(epd.imagered, 130, 10)
+    w_red.printstring("Lause: Pöllö söi äyriäisiä yössä.")
+    Writer.set_textpos(epd.imagered, 150, 10)
+    w_red.printstring("Paikkakunta: Åland ja Örebro")
+
+    epd.display()
 
 if __name__=='__main__':
     # Try to sync time from NTP, then print UTC and Finland time (UTC+2 winter)
@@ -652,6 +663,8 @@ if __name__=='__main__':
 
     
     epd.init()
+    # Optional: show full Finnish test page to verify glyphs
+    show_finnish_test_page(epd)
     epd.imageblack_win1.fill(0xff)
     # epd.imageblack.fill(0xff)
     # epd.imagered.fill(0x00)
