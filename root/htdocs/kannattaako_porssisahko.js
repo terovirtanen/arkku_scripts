@@ -102,15 +102,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function parseEnergyCSV(text) {
-        const lines = text.split('\n');
-        const data = lines.map(line => {
-            const [date, energy] = line.split(';');
-            const formattedDate = parseEnergyDate(date);
+        // FinGrid CSV format:
+        // Mittauspisteen tunnus;Tuotteen tyyppi;Resoluutio;Yksikkötyyppi;Lukeman tyyppi;Alkuaika;Määrä;Laatu
+        // 643003825107340356;8716867000030;PT15M;kWh;BN01;2024-12-31T22:00:00Z;0,150000;OK
+
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        if (lines.length === 0) return [];
+        
+        // Parse header row
+        const headers = lines[0].split(';');
+        const dateIndex = headers.indexOf('Alkuaika');
+        const energyIndex = headers.indexOf('Määrä');
+        
+        // Parse data rows (skip header)
+        const data = lines.slice(1).map(line => {
+            const columns = line.split(';');
+            const dateString = columns[dateIndex];
+            const energyString = columns[energyIndex];
+            
             return {
-                date: formattedDate,
-                energy: energy ? parseFloat(energy.replace(',', '.')) : undefined
+                date: new Date(dateString),
+                energy: energyString ? parseFloat(energyString.replace(',', '.')) : undefined
             };
         });
+        
         return data;
     }
     //parseEnergyDate('31.01.2021 00:00');
@@ -118,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const [day, month, yearAndTime] = dateString.split('.');
         const [year, hourAndMinute] = yearAndTime.split(' ');
         const [hour, minute] = hourAndMinute.split(':');
-        return new Date(year, month-1, day, hour);
+        return new Date(year, month-1, day, hour, minute);
     }
 
     function parsePriceCSV(text) {
@@ -139,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const [day, month, yearAndTime] = dateString.split('/');
         const [year, hourAndMinute] = yearAndTime.split(' ');
         const [hour, minute] = hourAndMinute.split(':');
-        return new Date(year, month-1, day, hour);
+        return new Date(year, month-1, day, hour, minute);
     }
 
 

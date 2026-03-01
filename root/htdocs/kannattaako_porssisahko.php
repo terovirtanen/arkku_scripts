@@ -34,9 +34,9 @@
                 <div class="info-box">
                 <p>Syötä energian kulutuksen tuntikohtainen taulukko.
                     Taulukon saa ladattua esimerkiksi Carunan verkkopalvelusta. Palvelusta saadun .xlsx taulukon voi antaa sellaisenaan josta lasketaan kulutustiedot ja kuukausihinnat pörssisähköllä. 
+                    Toinen vaihtoehto on ladata taulukko FinGridin datahubista josta saa varttikohtaisen kulutustiedon .csv muodossa. Tämäkin voi ladata sellaisenaan.
                     Laskenta tehdään niillä tiedolla mitä taulukossa on, puuttuvia tietoja tai ajanjaksoja ei tarkisteta. Kuitenkin tuntikohtaista kulutusta vastaava hintatieto tulee löytyä jotta laskenta voidaan suorittaa.
                     Tiedot lasketaan yhteen kuukausi ja vuosi kohtaisesti.
-                    Voit myös antaa .csv tiedoston jossa on kahdessa sarakkeessa päivämäärä ja kulutus kWh. Tiedostossa tulee olla päivämäärä ja kulutus erotettuna puolipisteellä ja rivit rivinvaihdolla. 
                     Tiedostoja ei tallenneta mihinkään vaan selain lukee tiedoston ja tiedot lasketaan selaimessa.</p>
                     <p>Pörssisähkön tuntikohtaiset hintatiedot on haettu <a href="https://porssisahko.net/">porssisahko.net</a> sivuilta. 
                     Tuntikohtaiset hintatiedot on vuodesta 2021 alkaen ja viimeisin 16.8.2025. Tällä aikavälillä voidaan siis laskenta suorittaa.</p>
