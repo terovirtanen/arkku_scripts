@@ -19,7 +19,7 @@
         Sen voi laskea alla olevalla laskurilla.</p>
         <h2>Tee näin</h2>
         <p>Anna energian kulutus taulukko ja laske olisiko pörssisähkö kannattanut menneenä aikana. 
-        Taulukon saa ladattua esimerkiksi Carunan verkkopalvelusta. Katso tarkemmin tiedoston ohjeista.<br>
+        Taulukon saa ladattua esimerkiksi Carunan verkkopalvelusta tai <a href="https://www.fingrid.fi/sahkomarkkinat/datahub/kirjautuminen-datahubin-asiakasportaaliin/" target="_blank" rel="noopener noreferrer">Fingridin datahubista</a>. Katso tarkemmin tiedoston ohjeista.<br>
         Tiedot lasketaan kuukausi- ja vuosikohtaisesti ja tulokset esitetään taulukkona ja kaaviona.</p>
         <br>
 
