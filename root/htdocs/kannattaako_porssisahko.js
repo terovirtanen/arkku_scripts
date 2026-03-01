@@ -281,17 +281,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const labels = Object.values(yearlyData).map(entry => entry.date.getFullYear());
         const averagePrices = Object.values(yearlyData).map(entry => (entry.totalCost / entry.energy).toFixed(2));
 
+        // Calculate overall average price for the entire period
+        const totalEnergy = Object.values(yearlyData).reduce((sum, entry) => sum + entry.energy, 0);
+        const totalCost = Object.values(yearlyData).reduce((sum, entry) => sum + entry.totalCost, 0);
+        const overallAveragePrice = (totalCost / totalEnergy).toFixed(2);
+
         return new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Keskihinta (c/kWh)',
+                        label: 'Pörssisähkön keskihinta (c/kWh)',
                         data: averagePrices,
                         backgroundColor: 'rgba(54, 162, 235, 0.2)',
                         borderColor: 'rgba(54, 162, 235, 1)',
                         borderWidth: 1,
+                        fill: false
+                    },
+                    {
+                        label: 'Pörssisähkön kauden keskihinta (c/kWh)',
+                        data: new Array(labels.length).fill(overallAveragePrice),
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 2,
+                        type: 'line',
                         fill: false
                     },
                     {
@@ -362,17 +375,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const labels = Object.values(monthlyData).map(entry => entry.date.toLocaleDateString('fi-FI', { year: 'numeric', month: 'long' }));
         const averagePrices = Object.values(monthlyData).map(entry => (entry.totalCost / entry.energy).toFixed(2));
 
+        // Calculate overall average price for the entire period
+        const totalEnergy = Object.values(monthlyData).reduce((sum, entry) => sum + entry.energy, 0);
+        const totalCost = Object.values(monthlyData).reduce((sum, entry) => sum + entry.totalCost, 0);
+        const overallAveragePrice = (totalCost / totalEnergy).toFixed(2);
+
         return new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Keskihinta (c/kWh)',
+                        label: 'Pörssisähkön keskihinta (c/kWh)',
                         data: averagePrices,
                         backgroundColor: 'rgba(54, 162, 235, 0.2)',
                         borderColor: 'rgba(54, 162, 235, 1)',
                         borderWidth: 1,
+                        fill: false
+                    },
+                    {
+                        label: 'Pörssisähkön kauden keskihinta (c/kWh)',
+                        data: new Array(labels.length).fill(overallAveragePrice),
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 2,
+                        type: 'line',
                         fill: false
                     },
                     {
