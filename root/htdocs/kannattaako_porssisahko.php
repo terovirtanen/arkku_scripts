@@ -39,7 +39,7 @@
                     Tiedot lasketaan yhteen kuukausi ja vuosi kohtaisesti.
                     Tiedostoja ei tallenneta mihinkään vaan selain lukee tiedoston ja tiedot lasketaan selaimessa.</p>
                     <p>Pörssisähkön tuntikohtaiset hintatiedot on haettu <a href="https://porssisahko.net/">porssisahko.net</a> sivuilta. 
-                    Tuntikohtaiset hintatiedot on vuodesta 2021 alkaen ja viimeisin 16.8.2025. Tällä aikavälillä voidaan siis laskenta suorittaa.</p>
+                    Tuntikohtaiset hintatiedot on vuodesta 2021 alkaen ja viimeisin 2.3.2026. Tällä aikavälillä voidaan siis laskenta suorittaa.</p>
                     <p>Tuntikohtaisista tiedoista lasketaan kuukausi ja vuosikohtaiset kulutus ja hintatiedot pörssisähköllä.</p>
                     <p>
                     Hyväksytyt tiedostomuodot: .xlsx, .csv<br>
