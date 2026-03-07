@@ -13,7 +13,7 @@ set -a
 source "$ENV_FILE"
 set +a
 
-BACKUP_DIR="/mnt/usb/backup"
+BACKUP_DIR="/mnt/usb/backup/mysql"
 HOST="${MYSQL_HOST:-localhost}"
 PORT="${MYSQL_PORT:-3306}"
 USER="${MYSQL_USER:-root}"
@@ -21,6 +21,7 @@ if [[ -n "${MYSQL_PASSWORD:-}" ]]; then
 	export MYSQL_PWD="$MYSQL_PASSWORD"
 fi
 
+mkdir -p "$BACKUP_DIR"
 BACKUP_FILE="$BACKUP_DIR/mysql_backup.sql.gz"
 RCLONE_REMOTE=jottaremote
 RCLONE_TARGET_DIR="${RCLONE_TARGET_DIR:-mysql_backup}"
