@@ -24,7 +24,7 @@ fi
 mkdir -p "$BACKUP_DIR"
 BACKUP_FILE="$BACKUP_DIR/mysql_backup.sql.gz"
 RCLONE_REMOTE=jottaremote
-RCLONE_TARGET_DIR="${RCLONE_TARGET_DIR:-mysql_backup}"
+RCLONE_TARGET_DIR="${RCLONE_TARGET_DIR:-raspberry}"
 
 mkdir -p "$BACKUP_DIR"
 
