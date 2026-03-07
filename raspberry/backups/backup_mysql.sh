@@ -28,7 +28,7 @@ RCLONE_TARGET_DIR="${RCLONE_TARGET_DIR:-mysql_backup}"
 
 mkdir -p "$BACKUP_DIR"
 
-mysqldump --single-transaction --quick --lock-tables=false -h "$HOST" -P "$PORT" -u "$USER" --all-databases | gzip > "$BACKUP_FILE"
+sudo mysqldump --single-transaction --quick --lock-tables=false --all-databases | gzip > "$BACKUP_FILE"
 
 echo "Backup created: $BACKUP_FILE"
 
