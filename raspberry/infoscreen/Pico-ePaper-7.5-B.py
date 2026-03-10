@@ -70,6 +70,60 @@ import framebuf2 as framebuf
 from writer import Writer
 import font10_fi as tempfont  # Use Finnish charset font
 
+def draw_scaled_text(writer, text, scale=2):
+    """
+    Draw text with font scaled by multiplier (e.g., 2 = double size).
+    Returns the width of the rendered text in pixels.
+    """
+    if scale == 1:
+        writer.printstring(text)
+        return writer.stringlen(text)
+    
+    # Get the starting position
+    row, col = Writer.set_textpos(writer.device, row=None, col=None)
+    
+    # Create a small temporary framebuf for one char at a time
+    max_w = writer.font.max_width()
+    max_h = writer.font.height()
+    temp_buf = bytearray((max_w * max_h + 7) // 8)
+    temp_fb = framebuf.FrameBuffer(temp_buf, max_w, max_h, framebuf.MONO_HLSB)
+    
+    total_width = 0
+    for char in text:
+        glyph, char_h, char_w = writer.font.get_ch(char)
+        
+        # Clear temp buffer
+        temp_fb.fill(writer.bgcolor)
+        
+        # Draw single character to temp buffer
+        div, mod = divmod(char_w, 8)
+        gbytes = div + 1 if mod else div
+        
+        for y in range(char_h):
+            for x in range(char_w):
+                byte_idx = (x // 8) + y * gbytes
+                bit_idx = 7 - (x % 8) if writer.font.reverse() else x % 8
+                if byte_idx < len(glyph):
+                    pixel_val = (glyph[byte_idx] >> bit_idx) & 1
+                    if pixel_val:
+                        temp_fb.pixel(x, y, writer.fgcolor)
+        
+        # Scale and blit to device
+        for y in range(char_h):
+            for x in range(char_w):
+                if temp_fb.pixel(x, y) == writer.fgcolor:
+                    # Draw scaled pixel as scale x scale rectangle
+                    writer.device.fill_rect(col + total_width + x * scale, 
+                                          row + y * scale, 
+                                          scale, scale, 
+                                          writer.fgcolor)
+        
+        total_width += char_w * scale
+    
+    # Update writer position
+    Writer.set_textpos(writer.device, row=row, col=col + total_width)
+    return total_width
+
 # Optional: sync RTC from NTP (requires Wi‑Fi connection)
 def try_ntp_sync():
     try:
@@ -114,10 +168,17 @@ class FrameWindow:
         self.imageblack = framebuf.FrameBuffer(self.buffer_black, self.width, self.height, framebuf.MONO_HLSB)
         self.imagered = framebuf.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
 
+        self.init()
+
+    def init(self):
+        # Prepare window: white background on both layers
+        self.imageblack.fill(0xff)
+        self.imagered.fill(0x00)
+
     def display(self):
         print("FrameWindow display")
-        # self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
-        self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        # self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
 
 class TempereratureWindow(FrameWindow):
     # Top-right quarter of the full display
@@ -180,6 +241,9 @@ class EPD_7in5_B:
         self.width = EPD_WIDTH
         self.height = EPD_HEIGHT
         self.partFlag=1
+        self.red_full_refresh_interval_ms = 120000
+        self.last_red_full_refresh_ms = utime.ticks_ms() - self.red_full_refresh_interval_ms
+        self.pending_red_full_refresh = False
         
         self.spi = SPI(1)
         self.spi.init(baudrate=4000_000)
@@ -200,9 +264,9 @@ class EPD_7in5_B:
         self.imagered_win1 = framebuf.FrameBuffer(self.buffer_red_win1, self.width_win1, self.height_win1, framebuf.MONO_HLSB )
 
 
-        d = props_as_dict(self.imageblack_win1)
-        print(json.dumps(d)) 
-        print(self.imageblack_win1.height)
+        # d = props_as_dict(self.imageblack_win1)
+        # print(json.dumps(d)) 
+        # print(self.imageblack_win1.height)
 
         self.init()
 
@@ -340,7 +404,7 @@ class EPD_7in5_B:
         self.reset()
 
         self.send_command(0X00)
-        self.send_data(0x1F)
+        self.send_data(0x1F)  # Changed from 0x1F to 0x0F to enable 3-color (red) support in partial refresh
 
         self.send_command(0x04)
         self.delay_ms(100)
@@ -425,6 +489,7 @@ class EPD_7in5_B:
         for i in range(0, wide):
             self.send_data1(self.buffer_black[(i * high) : ((i+1) * high)])
             
+        print("and red")
         # send red data
         self.send_command(0x13) 
         for i in range(0, wide):
@@ -523,6 +588,38 @@ class EPD_7in5_B:
         Width = (Xend - Xstart) // 8
         Height = Yend - Ystart
 
+        red_has_data = False
+        for i in range(0, Width):
+            chunk = BufferRed[(i * Height) : ((i+1) * Height)]
+            for b in chunk:
+                if b != 0x00:
+                    red_has_data = True
+                    break
+            if red_has_data:
+                break
+
+        if red_has_data:
+            win_width = Xend - Xstart
+            win_height = Yend - Ystart
+            win_black = framebuf.FrameBuffer(BufferBlack, win_width, win_height, framebuf.MONO_HLSB)
+            win_red = framebuf.FrameBuffer(BufferRed, win_width, win_height, framebuf.MONO_HLSB)
+            self.imageblack.blit(win_black, Xstart, Ystart)
+            self.imagered.blit(win_red, Xstart, Ystart)
+            self.pending_red_full_refresh = True
+
+        if self.pending_red_full_refresh:
+            now = utime.ticks_ms()
+            if utime.ticks_diff(now, self.last_red_full_refresh_ms) >= self.red_full_refresh_interval_ms:
+                print("Deferred red full refresh")
+                # self.init()
+                self.init_Fast()
+                self.display()
+                self.init_part()
+                self.partFlag = 1
+                self.last_red_full_refresh_ms = now
+                self.pending_red_full_refresh = False
+                return
+
         self.send_command(0x91)     # enter partial mode
         self.send_command(0x90)     # window setting
         self.send_data (Xstart//256)
@@ -546,10 +643,7 @@ class EPD_7in5_B:
         for i in range(0, Width):
             self.send_data1(BufferBlack[(i * Height) : ((i+1) * Height)])
 
-        # write red layer
-        self.send_command(0x13)
-        for i in range(0, Width):
-            self.send_data1(BufferRed[(i * Height) : ((i+1) * Height)])
+        # no red writes in partial path; red is deferred to timed full refresh
 
         # single refresh for both layers
         # self.send_command(0x12)
@@ -565,6 +659,8 @@ class EPD_7in5_B:
 
 
 def show_finnish_test_page(epd):
+    print("show_finnish_test_page start")
+
     # Full-screen Finnish glyph verification for both layers
     epd.init()
     epd.imageblack.fill(0xff)
@@ -593,7 +689,9 @@ def show_finnish_test_page(epd):
     Writer.set_textpos(epd.imagered, 150, 10)
     w_red.printstring("Paikkakunta: Åland ja Örebro")
 
+    print("show_finnish_test_page display")
     epd.display()
+    print("show_finnish_test_page done")
 
 if __name__=='__main__':
     # Try to sync time from NTP, then print UTC and Finland time (UTC+2 winter)
@@ -606,19 +704,19 @@ if __name__=='__main__':
     epd = EPD_7in5_B()
     epd.Clear()
     
-    epd.imageblack.fill(0xff)
-    print("fill black")
-    epd.imagered.fill(0x00)
-    print("fill red")
+    # # epd.imageblack.fill(0xff)
+    # # print("fill black")
+    # # epd.imagered.fill(0x00)
+    # # print("fill red")
     
-    epd.imageblack.text("Waveshare", 5, 10, 0x00)
-    print("draw text 1")
-    epd.imagered.text("Pico_ePaper-7.5-B", 5, 40, 0xff)
-    print("draw text 2")
-    epd.imageblack.text("Raspberry Pico", 5, 70, 0x00)
-    print("draw text 3")
-    epd.display()
-    print("display")
+    # # epd.imageblack.text("Waveshare", 5, 10, 0x00)
+    # # print("draw text 1")
+    # # epd.imagered.text("Pico_ePaper-7.5-B", 5, 40, 0xff)
+    # # print("draw text 2")
+    # # epd.imageblack.text("Raspberry Pico", 5, 70, 0x00)
+    # # print("draw text 3")
+    # # epd.display()
+    # # print("display")
 
     # epd.delay_ms(5000)
 
@@ -664,7 +762,8 @@ if __name__=='__main__':
     
     epd.init()
     # Optional: show full Finnish test page to verify glyphs
-    show_finnish_test_page(epd)
+# test page toimii
+    # show_finnish_test_page(epd)
     epd.imageblack_win1.fill(0xff)
     # epd.imageblack.fill(0xff)
     # epd.imagered.fill(0x00)
@@ -679,10 +778,12 @@ if __name__=='__main__':
 
     for i in range(0, 4):
         print("partial loop")
-        win2.imageblack.fill(0xff)
+        # win2.imageblack.fill(0xff)
+        # win2.imagered.fill(0x00)
         win2.imageblack.fill_rect(40, 40, 10, 20, 0xff)
         win2.imageblack.text(str(i), 41, 41, 0x00)
-        win2.imagered.text("win 2", 200, 100, 0x00)
+        # mustana tämä (61,61) toimii mutta ei punaisena
+        win2.imagered.text(str(i), 61, 61, 0x00)
         win2.display()
 
         epd.imageblack_win1.fill_rect(0, 0, 10, 20, 0xff)
