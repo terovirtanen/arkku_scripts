@@ -146,6 +146,45 @@ DC_PIN          = 8
 CS_PIN          = 9
 BUSY_PIN        = 13
 
+# EPD command cheat sheet (7.5" B, practical mapping used in this driver)
+# Source references:
+# - Waveshare wiki: https://www.waveshare.com/wiki/Pico-ePaper-7.5-B
+# - 7.5inch e-Paper B specification PDF (register/command details)
+# - Waveshare Pico_ePaper_Code reference drivers
+#
+# 0x00 : PANEL SETTING
+#        Valitsee paneelin ajotilan (tässä 3-väri/full- ja partial-sekvensseille).
+# 0x04 : POWER ON
+#        Kytkee panelin sisäiset HV-jännitteet päälle (BUSY pitää odottaa).
+# 0x06 : BOOSTER SOFT START
+#        Boosterin pehmeä käynnistys (jännitenoston ajoitus/profiili).
+#        Tämän ajurin datat: 0x17, 0x17, 0x28, 0x17.
+#        3. tavu (0x28) vaikuttaa käynnistysprofiiliin; Wavesharella vaihtoehto 0x38.
+# 0x10 : WRITE RAM
+#        Kirjoittaa 1. kuvatason RAMiin (tässä ajurissa black/white-puskuri).
+# 0x12 : DISPLAY REFRESH
+#        Käynnistää varsinaisen päivitysaallon (vasta tämä tuo RAM-sisällön näkyviin).
+# 0x13 : WRITE RAM
+#        Kirjoittaa 2. kuvatason RAMiin (tässä ajurissa red/white-puskuri).
+# 0x15 : VCOM-tilaan liittyvä ohjaus
+#        Vendor-sekvenssissä 0x00; jätetään ennalleen yhteensopivuuden vuoksi.
+# 0x50 : VCOM AND DATA INTERVAL SETTING
+#        Säätää VCOM/data-aikaväliä sekä border-käyttäytymistä.
+# 0x60 : TCON SETTING
+#        Ohjaimen sisäinen timing-asetus gate/source-ohjaukselle.
+# 0x61 : RESOLUTION SETTING
+#        Asettaa paneelin resoluution (800 x 480).
+# 0x65 : Resolution related vendor setting
+#        Lisäresoluutio-/offset-asetus (Waveshare init-sekvenssin osa).
+# 0x90 : PARTIAL WINDOW
+#        Määrittää osapäivityksen ikkunan rajat.
+# 0x91 : PARTIAL IN
+#        Siirtää ohjaimen partial-tilaan.
+# 0x02 : POWER OFF
+#        Sammuttaa HV-ajot turvallisesti.
+# 0x07 : DEEP SLEEP
+#        Syväuni; herätys vaatii reset+init.
+
 class FrameWindow:
     def __init__(self, epd, Xstart, Ystart, Xend, Yend):
         if (Xend > EPD_WIDTH or Yend > EPD_HEIGHT):
@@ -231,6 +270,147 @@ class TempereratureWindow(FrameWindow):
         print("TempereratureWindow display")
         self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
         # self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
+
+class ElectricityWindow(FrameWindow):
+    # Bottom-right quarter of the full display
+
+    WIDTH = EPD_WIDTH // 2
+    HEIGHT = EPD_HEIGHT // 2
+    XSTART = EPD_WIDTH // 2
+    YSTART = EPD_HEIGHT // 2
+    XEND = EPD_WIDTH
+    YEND = EPD_HEIGHT
+
+    BAR_COUNT = 20
+    PRICE_RED_THRESHOLD = 20.0
+
+    def __init__(self, epd, current_price="--.- c/kWh", prices=None, price_red_threshold=None):
+        self.current_price = current_price
+        if prices is None:
+            self.prices = [0] * self.BAR_COUNT
+        else:
+            self.prices = self._normalize_prices(prices)
+
+        if price_red_threshold is None:
+            self.price_red_threshold = self.PRICE_RED_THRESHOLD
+        else:
+            self.price_red_threshold = float(price_red_threshold)
+
+        super().__init__(epd, self.XSTART, self.YSTART, self.XEND, self.YEND)
+
+        Xstart = self.XSTART
+        Ystart = self.YSTART
+        Xend = self.XEND
+        Yend = self.YEND
+
+        print("ElectricityWindow init")
+        print("Xstart:", Xstart, "Xend:", Xend, "Ystart:", Ystart, "Yend:", Yend)
+        super().__init__(epd, Xstart, Ystart, Xend, Yend)
+        self.init()
+
+    def _extract_price_value(self, value):
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        text = str(value).replace(',', '.')
+        numeric = []
+        dot_seen = False
+
+        for ch in text:
+            if ch.isdigit() or (ch == '-' and not numeric):
+                numeric.append(ch)
+            elif ch == '.' and not dot_seen:
+                numeric.append(ch)
+                dot_seen = True
+
+        try:
+            if numeric:
+                return float(''.join(numeric))
+        except ValueError:
+            pass
+
+        return None
+
+    def _normalize_prices(self, prices):
+        values = list(prices[:self.BAR_COUNT])
+        if len(values) < self.BAR_COUNT:
+            values.extend([0] * (self.BAR_COUNT - len(values)))
+        return values
+
+    def _format_current_price_text(self):
+        text = str(self.current_price)
+        if "c/kWh" in text:
+            return text
+
+        price_value = self._extract_price_value(self.current_price)
+        if price_value is None:
+            return text
+
+        if int(price_value) == price_value:
+            return "%d c/kWh" % int(price_value)
+
+        return "%s c/kWh" % price_value
+
+    def set_current_price(self, current_price):
+        self.current_price = current_price
+        self.init()
+
+    def set_prices(self, prices):
+        self.prices = self._normalize_prices(prices)
+        self.init()
+
+    def init(self):
+
+        self.imageblack.fill(0xff)
+        self.imagered.fill(0x00)
+
+        price_value = self._extract_price_value(self.current_price)
+        show_price_red = (price_value is not None and price_value > self.price_red_threshold)
+        current_price_text = self._format_current_price_text()
+
+        self.imageblack.text("Hinta nyt", 10, 10, 0x00)
+
+        if show_price_red:
+            w_red = Writer(self.imagered, tempfont)
+            Writer.set_textpos(self.imagered, 32, 10)
+            w_red.printstring(current_price_text)
+        else:
+            self.imageblack.text(current_price_text, 10, 32, 0x00)
+
+        graph_left = self.width - 190
+        graph_top = 20
+        graph_bottom = self.height - 20
+        graph_height = graph_bottom - graph_top
+
+        bar_width = 6
+        gap = 2
+
+        max_price = 1
+        for price in self.prices:
+            if price > max_price:
+                max_price = price
+
+        self.imageblack.hline(graph_left - 4, graph_bottom, self.BAR_COUNT * (bar_width + gap) + 4, 0x00)
+
+        for i in range(self.BAR_COUNT):
+            price = self.prices[i]
+            if price < 0:
+                price = 0
+
+            bar_height = int((price / max_price) * graph_height)
+            if bar_height < 1 and price > 0:
+                bar_height = 1
+
+            x = graph_left + i * (bar_width + gap)
+            y = graph_bottom - bar_height
+
+            if bar_height > 0:
+                self.imageblack.fill_rect(x, y, bar_width, bar_height, 0x00)
+
+    def display(self):
+        print("ElectricityWindow display")
+        self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        self.epd.display_red()
 
 class EPD_7in5_B:
     def __init__(self):
@@ -328,11 +508,11 @@ class EPD_7in5_B:
         # EPD hardware init start     
         self.reset()
         
-        self.send_command(0x06)     # btst
-        self.send_data(0x17)
-        self.send_data(0x17)
-        self.send_data(0x28)        # If an exception is displayed, try using 0x38
-        self.send_data(0x17)
+        self.send_command(0x06)     # BOOSTER SOFT START
+        self.send_data(0x17)        # booster param 1 (vendor profile)
+        self.send_data(0x17)        # booster param 2 (vendor profile)
+        self.send_data(0x28)        # booster param 3; try 0x38 if panel behaves abnormally
+        self.send_data(0x17)        # booster param 4 (vendor profile)
         
 #         self.send_command(0x01)  # POWER SETTING
 #         self.send_data(0x07)
@@ -404,7 +584,7 @@ class EPD_7in5_B:
         self.reset()
 
         self.send_command(0X00)
-        self.send_data(0x1F)  # Changed from 0x1F to 0x0F to enable 3-color (red) support in partial refresh
+        self.send_data(0x1F)  # Partial support only BW refresh
 
         self.send_command(0x04)
         self.delay_ms(100)
@@ -575,6 +755,8 @@ class EPD_7in5_B:
 # Width: 20 Height: 80
 
     def display_Partial_Both(self, BufferBlack, BufferRed, Xstart, Ystart, Xend, Yend):
+        print("display_Partial_Both")
+        print("Xstart:", Xstart, "Xend:", Xend, "Ystart:", Ystart, "Yend:", Yend)
         if((Xstart % 8 + Xend % 8 == 8 & Xstart % 8 > Xend % 8) | Xstart % 8 + Xend % 8 == 0 | (Xend - Xstart)%8 == 0):
             Xstart = Xstart // 8 * 8
             Xend = Xend // 8 * 8
@@ -607,18 +789,18 @@ class EPD_7in5_B:
             self.imagered.blit(win_red, Xstart, Ystart)
             self.pending_red_full_refresh = True
 
-        if self.pending_red_full_refresh:
-            now = utime.ticks_ms()
-            if utime.ticks_diff(now, self.last_red_full_refresh_ms) >= self.red_full_refresh_interval_ms:
-                print("Deferred red full refresh")
-                # self.init()
-                self.init_Fast()
-                self.display()
-                self.init_part()
-                self.partFlag = 1
-                self.last_red_full_refresh_ms = now
-                self.pending_red_full_refresh = False
-                return
+        # if self.pending_red_full_refresh:
+        #     now = utime.ticks_ms()
+        #     if utime.ticks_diff(now, self.last_red_full_refresh_ms) >= self.red_full_refresh_interval_ms:
+        #         print("Deferred red full refresh")
+        #         # self.init()
+        #         self.init_Fast()
+        #         self.display()
+        #         self.init_part()
+        #         self.partFlag = 1
+        #         self.last_red_full_refresh_ms = now
+        #         self.pending_red_full_refresh = False
+        #         return
 
         self.send_command(0x91)     # enter partial mode
         self.send_command(0x90)     # window setting
@@ -650,6 +832,17 @@ class EPD_7in5_B:
         # self.delay_ms(100)
         # self.WaitUntilIdle()
         self.TurnOnDisplay()
+
+    def display_red(self):
+        print("display red")
+        if self.pending_red_full_refresh:
+            print("display red refresh")
+            # self.init()
+            self.init_Fast()
+            self.display()
+            self.partFlag = 0
+            self.last_red_full_refresh_ms = utime.ticks_ms()
+            self.pending_red_full_refresh = False       
 
     def sleep(self):
         self.send_command(0x02) # power off
@@ -693,6 +886,27 @@ def show_finnish_test_page(epd):
     epd.display()
     print("show_finnish_test_page done")
 
+def show_temperature_window(epd):
+    win_temp = TempereratureWindow(epd)
+    win_temp.display()
+
+def show_electricity_window(epd, current_price="24.6 c/kWh", prices=None, price_red_threshold=None):
+    if prices is None:
+        prices = [
+            12.3, 11.8, 10.6, 9.9, 10.1,
+            11.7, 13.2, 15.4, 18.6, 21.1,
+            24.6, 26.2, 23.7, 19.9, 17.1,
+            16.0, 14.8, 13.9, 12.7, 11.5,
+        ]
+
+    win_electricity = ElectricityWindow(
+        epd,
+        current_price=current_price,
+        prices=prices,
+        price_red_threshold=price_red_threshold,
+    )
+    win_electricity.display()
+
 if __name__=='__main__':
     # Try to sync time from NTP, then print UTC and Finland time (UTC+2 winter)
     # try_ntp_sync()
@@ -702,8 +916,12 @@ if __name__=='__main__':
     # print("Nykyinen aika (UTC+2): %04d-%02d-%02d %02d:%02d:%02d" % (_fi[0], _fi[1], _fi[2], _fi[3], _fi[4], _fi[5]))
 
     epd = EPD_7in5_B()
+    epd.init()
     epd.Clear()
-    
+    epd.display_Base_color(0xFF)  # set base to white
+    epd.TurnOnDisplay()
+    epd.delay_ms(2000)
+
     # # epd.imageblack.fill(0xff)
     # # print("fill black")
     # # epd.imagered.fill(0x00)
@@ -757,34 +975,34 @@ if __name__=='__main__':
 
     # partial update
     print("partial start")
+    epd.init_part()
 
-
-    
-    epd.init()
     # Optional: show full Finnish test page to verify glyphs
 # test page toimii
     # show_finnish_test_page(epd)
     epd.imageblack_win1.fill(0xff)
     # epd.imageblack.fill(0xff)
     # epd.imagered.fill(0x00)
-    epd.display_Base_color(0xFF)
-    epd.init_part()
 
     # Demo: top-right temperature window
-    win_temp = TempereratureWindow(epd)
-    win_temp.display()
+    show_temperature_window(epd)
 
-    win2 = FrameWindow(epd, 400, 240, 800, 480)
+    # Demo: bottom-right electricity window
+    for current_price in [24, 5, 20]:
+        show_electricity_window(epd, current_price=current_price)
+        epd.delay_ms(5000)
+
+    # win2 = FrameWindow(epd, 400, 240, 800, 480)
 
     for i in range(0, 4):
         print("partial loop")
-        # win2.imageblack.fill(0xff)
-        # win2.imagered.fill(0x00)
-        win2.imageblack.fill_rect(40, 40, 10, 20, 0xff)
-        win2.imageblack.text(str(i), 41, 41, 0x00)
-        # mustana tämä (61,61) toimii mutta ei punaisena
-        win2.imagered.text(str(i), 61, 61, 0x00)
-        win2.display()
+        # # win2.imageblack.fill(0xff)
+        # # win2.imagered.fill(0x00)
+        # win2.imageblack.fill_rect(40, 40, 10, 20, 0xff)
+        # win2.imageblack.text(str(i), 41, 41, 0x00)
+        # # mustana tämä (61,61) toimii mutta ei punaisena
+        # win2.imagered.text(str(i), 61, 61, 0x00)
+        # win2.display()
 
         epd.imageblack_win1.fill_rect(0, 0, 10, 20, 0xff)
         epd.imageblack_win1.fill_rect(0, 30, 10, 20, 0x00)
