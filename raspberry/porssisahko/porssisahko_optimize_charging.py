@@ -32,7 +32,7 @@ def load_config():
 
         # fixed price periods
         'fixed_price_date_start': '2026-1-1',  # '2024-12-24'
-        'fixed_price_date_end': '2026-3-31',   # '2024-12-24'
+        'fixed_price_date_end': '2026-3-20',   # '2024-12-24'
         'fixed_price': 9.58                    # fixed price during period (c/kWh)
     }
     
