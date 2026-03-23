@@ -284,7 +284,7 @@ class ElectricityWindow(FrameWindow):
     BAR_COUNT = 20
     PRICE_RED_THRESHOLD = 20.0
 
-    def __init__(self, epd, current_price="--.- c/kWh", prices=None, price_red_threshold=None):
+    def __init__(self, epd, current_price=0.0, prices=None, price_red_threshold=None):
         self.current_price = current_price
         if prices is None:
             self.prices = [0] * self.BAR_COUNT
@@ -353,11 +353,9 @@ class ElectricityWindow(FrameWindow):
 
     def set_current_price(self, current_price):
         self.current_price = current_price
-        self.init()
 
     def set_prices(self, prices):
         self.prices = self._normalize_prices(prices)
-        self.init()
 
     def init(self):
 
@@ -371,9 +369,10 @@ class ElectricityWindow(FrameWindow):
         self.imageblack.text("Hinta nyt", 10, 10, 0x00)
 
         if show_price_red:
-            w_red = Writer(self.imagered, tempfont)
-            Writer.set_textpos(self.imagered, 32, 10)
-            w_red.printstring(current_price_text)
+            # w_red = Writer(self.imagered, tempfont)
+            # Writer.set_textpos(self.imagered, 32, 10)
+            # w_red.printstring(current_price_text)
+            self.imagered.text(current_price_text, 10, 32, 0x00)
         else:
             self.imageblack.text(current_price_text, 10, 32, 0x00)
 
@@ -409,7 +408,9 @@ class ElectricityWindow(FrameWindow):
 
     def display(self):
         print("ElectricityWindow display")
-        self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        # self.epd.display_Base_color(0xFF)  # set base to white
+        self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        # self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
         self.epd.display_red()
 
 class EPD_7in5_B:
@@ -821,7 +822,7 @@ class EPD_7in5_B:
                 self.send_data1([0xFF] * Height)
 
         # write black layer
-        self.send_command(0x10)
+        self.send_command(0x13)
         for i in range(0, Width):
             self.send_data1(BufferBlack[(i * Height) : ((i+1) * Height)])
 
@@ -839,6 +840,7 @@ class EPD_7in5_B:
             print("display red refresh")
             # self.init()
             self.init_Fast()
+
             self.display()
             self.partFlag = 0
             self.last_red_full_refresh_ms = utime.ticks_ms()
@@ -886,11 +888,10 @@ def show_finnish_test_page(epd):
     epd.display()
     print("show_finnish_test_page done")
 
-def show_temperature_window(epd):
-    win_temp = TempereratureWindow(epd)
-    win_temp.display()
+def show_temperature_window(temperature_window):
+    temperature_window.display()
 
-def show_electricity_window(epd, current_price="24.6 c/kWh", prices=None, price_red_threshold=None):
+def show_electricity_window(electricity_window, current_price=0.0, prices=None, price_red_threshold=None):
     if prices is None:
         prices = [
             12.3, 11.8, 10.6, 9.9, 10.1,
@@ -899,13 +900,11 @@ def show_electricity_window(epd, current_price="24.6 c/kWh", prices=None, price_
             16.0, 14.8, 13.9, 12.7, 11.5,
         ]
 
-    win_electricity = ElectricityWindow(
-        epd,
-        current_price=current_price,
-        prices=prices,
-        price_red_threshold=price_red_threshold,
-    )
-    win_electricity.display()
+    electricity_window.set_current_price(current_price)
+    electricity_window.set_prices(prices)
+    electricity_window.init()
+
+    electricity_window.display()
 
 if __name__=='__main__':
     # Try to sync time from NTP, then print UTC and Finland time (UTC+2 winter)
@@ -984,12 +983,15 @@ if __name__=='__main__':
     # epd.imageblack.fill(0xff)
     # epd.imagered.fill(0x00)
 
+    win_temp = TempereratureWindow(epd)
     # Demo: top-right temperature window
-    show_temperature_window(epd)
+    show_temperature_window(win_temp)
+
+    win_electricity = ElectricityWindow(epd)
 
     # Demo: bottom-right electricity window
     for current_price in [24, 5, 20]:
-        show_electricity_window(epd, current_price=current_price)
+        show_electricity_window(win_electricity, current_price=current_price)
         epd.delay_ms(5000)
 
     # win2 = FrameWindow(epd, 400, 240, 800, 480)
