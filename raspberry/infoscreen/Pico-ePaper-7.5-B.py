@@ -68,7 +68,8 @@ import framebuf2 as framebuf
 # Unicode (ä/ö) support via peterhinch's writer
 # https://github.com/peterhinch/micropython-font-to-py/blob/master/writer/writer_tests.py
 from writer import Writer
-import font10_fi as tempfont  # Use Finnish charset font
+import font10_fi as fifont10  # Use Finnish charset font
+import font20_fi as fifont20  # Use Finnish charset font20
 
 def draw_scaled_text(writer, text, scale=2):
     """
@@ -216,8 +217,12 @@ class FrameWindow:
 
     def display(self):
         print("FrameWindow display")
-        self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        # self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
         # self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        self.epd.blit(self.imageblack, self.imagered, self.Xstart, self.Ystart)
+        self.epd.display()
+
+
 
 class TempereratureWindow(FrameWindow):
     # Top-right quarter of the full display
@@ -252,7 +257,7 @@ class TempereratureWindow(FrameWindow):
         self.imagered.text("ulkorakennus", 10, 70, 0x00)
         self.imageblack.text("autotalli", 10, 100, 0x00)
 
-        w_blk = Writer(self.imageblack, tempfont, verbose=True)
+        w_blk = Writer(self.imageblack, fifont10, verbose=True)
         Writer.set_textpos(self.imageblack, 140, 10)
         # Testaa kaikki suomen erikoismerkit: ä ö Ä Ö å Å
         w_blk.printstring("äöÄÖåÅ — ääkköset")
@@ -261,15 +266,15 @@ class TempereratureWindow(FrameWindow):
         # Writer.set_textpos(self.imageblack, 10, 100)
         # w_blk.printstring("autotalli")
         # Header in red using Writer (supports Unicode)
-        w_red = Writer(self.imagered, tempfont)
+        w_red = Writer(self.imagered, fifont10)
         Writer.set_textpos(self.imagered, 140, 200)
         w_red.printstring("Lämpötilat")
 
 
-    def display(self):
-        print("TempereratureWindow display")
-        self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
-        # self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
+    # def display(self):
+    #     print("TempereratureWindow display")
+    #     self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
+    #     # self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
 
 class ElectricityWindow(FrameWindow):
     # Bottom-right quarter of the full display
@@ -296,15 +301,15 @@ class ElectricityWindow(FrameWindow):
         else:
             self.price_red_threshold = float(price_red_threshold)
 
-        super().__init__(epd, self.XSTART, self.YSTART, self.XEND, self.YEND)
+        # super().__init__(epd, self.XSTART, self.YSTART, self.XEND, self.YEND)
 
         Xstart = self.XSTART
         Ystart = self.YSTART
         Xend = self.XEND
         Yend = self.YEND
 
-        print("ElectricityWindow init")
-        print("Xstart:", Xstart, "Xend:", Xend, "Ystart:", Ystart, "Yend:", Yend)
+        # print("ElectricityWindow init")
+        # print("Xstart:", Xstart, "Xend:", Xend, "Ystart:", Ystart, "Yend:", Yend)
         super().__init__(epd, Xstart, Ystart, Xend, Yend)
         self.init()
 
@@ -368,13 +373,16 @@ class ElectricityWindow(FrameWindow):
 
         self.imageblack.text("Hinta nyt", 10, 10, 0x00)
 
+        self.imageblack.fill_rect(10, 32, 20, 20, 0xff)
+        Writer.set_textpos(self.imageblack, 32, 10)
+
         if show_price_red:
-            # w_red = Writer(self.imagered, tempfont)
-            # Writer.set_textpos(self.imagered, 32, 10)
-            # w_red.printstring(current_price_text)
-            self.imagered.text(current_price_text, 10, 32, 0x00)
+            w_black = Writer(self.imageblack, fifont20, verbose=False)
+            w_black.printstring(current_price_text)
         else:
-            self.imageblack.text(current_price_text, 10, 32, 0x00)
+            w_black = Writer(self.imageblack, fifont10, verbose=False)
+            w_black.printstring(current_price_text)
+            # self.imageblack.text(current_price_text, 10, 32, 0x00)
 
         graph_left = self.width - 190
         graph_top = 20
@@ -409,9 +417,16 @@ class ElectricityWindow(FrameWindow):
     def display(self):
         print("ElectricityWindow display")
         # self.epd.display_Base_color(0xFF)  # set base to white
-        self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
+        # self.epd.display_Partial_Both(self.buffer_black, self.buffer_red, self.Xstart, self.Ystart, self.Xend, self.Yend)
         # self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
-        self.epd.display_red()
+        # self.epd.display_red()
+
+        self.epd.blit(self.imageblack, self.imagered, self.Xstart, self.Ystart)        
+        # self.epd.display()
+
+        self.epd.display_Base_color(0xFF)
+        self.epd.init_part()
+        self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
 
 class EPD_7in5_B:
     def __init__(self):
@@ -782,12 +797,12 @@ class EPD_7in5_B:
                 break
 
         if red_has_data:
-            win_width = Xend - Xstart
-            win_height = Yend - Ystart
-            win_black = framebuf.FrameBuffer(BufferBlack, win_width, win_height, framebuf.MONO_HLSB)
-            win_red = framebuf.FrameBuffer(BufferRed, win_width, win_height, framebuf.MONO_HLSB)
-            self.imageblack.blit(win_black, Xstart, Ystart)
-            self.imagered.blit(win_red, Xstart, Ystart)
+            # win_width = Xend - Xstart
+            # win_height = Yend - Ystart
+            # win_black = framebuf.FrameBuffer(BufferBlack, win_width, win_height, framebuf.MONO_HLSB)
+            # win_red = framebuf.FrameBuffer(BufferRed, win_width, win_height, framebuf.MONO_HLSB)
+            # self.imageblack.blit(win_black, Xstart, Ystart)
+            # self.imagered.blit(win_red, Xstart, Ystart)
             self.pending_red_full_refresh = True
 
         # if self.pending_red_full_refresh:
@@ -840,11 +855,16 @@ class EPD_7in5_B:
             print("display red refresh")
             # self.init()
             self.init_Fast()
+            # self.init_part()
 
             self.display()
-            self.partFlag = 0
+            # self.partFlag = 0
             self.last_red_full_refresh_ms = utime.ticks_ms()
             self.pending_red_full_refresh = False       
+
+    def blit(self, imageBlack, imageRed, x, y):
+        self.imageblack.blit(imageBlack, x, y)
+        self.imagered.blit(imageRed, x, y)
 
     def sleep(self):
         self.send_command(0x02) # power off
@@ -857,12 +877,13 @@ def show_finnish_test_page(epd):
     print("show_finnish_test_page start")
 
     # Full-screen Finnish glyph verification for both layers
-    epd.init()
+    # epd.init()
+    epd.init_Fast()
     epd.imageblack.fill(0xff)
     epd.imagered.fill(0x00)
 
-    w_black = Writer(epd.imageblack, tempfont, verbose=False)
-    w_red = Writer(epd.imagered, tempfont, verbose=False)
+    w_black = Writer(epd.imageblack, fifont10, verbose=False)
+    w_red = Writer(epd.imagered, fifont10, verbose=False)
 
     # Title in red
     Writer.set_textpos(epd.imagered, 10, 10)
@@ -974,11 +995,11 @@ if __name__=='__main__':
 
     # partial update
     print("partial start")
-    epd.init_part()
+    # epd.init_part()
 
     # Optional: show full Finnish test page to verify glyphs
 # test page toimii
-    # show_finnish_test_page(epd)
+    show_finnish_test_page(epd)
     epd.imageblack_win1.fill(0xff)
     # epd.imageblack.fill(0xff)
     # epd.imagered.fill(0x00)
@@ -992,9 +1013,12 @@ if __name__=='__main__':
     # Demo: bottom-right electricity window
     for current_price in [24, 5, 20]:
         show_electricity_window(win_electricity, current_price=current_price)
-        epd.delay_ms(5000)
+        epd.delay_ms(1000)
 
     # win2 = FrameWindow(epd, 400, 240, 800, 480)
+    # epd.imageblack.fill(0xff)
+    epd.display_Base_color(0xFF)
+    epd.init_part()
 
     for i in range(0, 4):
         print("partial loop")
@@ -1005,7 +1029,7 @@ if __name__=='__main__':
         # # mustana tämä (61,61) toimii mutta ei punaisena
         # win2.imagered.text(str(i), 61, 61, 0x00)
         # win2.display()
-
+        epd.imageblack_win1.fill(0xff)
         epd.imageblack_win1.fill_rect(0, 0, 10, 20, 0xff)
         epd.imageblack_win1.fill_rect(0, 30, 10, 20, 0x00)
 
@@ -1037,8 +1061,12 @@ if __name__=='__main__':
         # Punainen alue (rect + teksti)
         # epd.display_Partial_Both(epd.buffer_black, epd.buffer_red, 0, 0, 800, 480)
         print("partial loop end")
-        epd.delay_ms(5000)
+        epd.delay_ms(2000)
             
+
+    epd.init_Fast()
+    epd.display()
+
     print("shutdown")
     epd.init()       
     epd.Clear()

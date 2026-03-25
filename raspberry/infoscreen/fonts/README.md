@@ -9,6 +9,8 @@ This repository does not vendor `font_to_py.py`. To generate `font10_fi.py` on W
    - `Invoke-WebRequest -Uri "https://raw.githubusercontent.com/peterhinch/micropython-font-to-py/master/font_to_py.py" -OutFile "fonts\font_to_py.py"`
 4. Generate a 10px font from Arial including Finnish characters:
    - `python fonts\font_to_py.py "C:\Windows\Fonts\arial.ttf" 10 raspberry\infoscreen\font10_fi.py -x --charset_file fonts\charset_fi.txt`
+5. font size 20, run in directory raspberry\infoscreen
+   - `c:\Users\Tero\AppData\Local\Programs\Python\Python313\python fonts\font_to_py.py "C:\Windows\Fonts\arial.ttf" 20 font20_fi.py -x --charset_file fonts\charset_fi.txt`
 
 Notes:
 - Change the TTF path to any installed font you prefer.
