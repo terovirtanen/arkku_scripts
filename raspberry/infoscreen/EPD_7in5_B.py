@@ -355,6 +355,10 @@ class EPD_7in5_B:
         self.delay_ms(100)
         self.WaitUntilIdle()
 
+    def blit(self, imageBlack, imageRed, x, y):
+        self.imageblack.blit(imageBlack, x, y)
+        self.imagered.blit(imageRed, x, y)
+
     def sleep(self):
         self.send_command(0x02) # power off
         self.WaitUntilIdle()

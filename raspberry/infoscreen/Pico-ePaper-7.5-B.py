@@ -252,7 +252,12 @@ class TempereratureWindow(FrameWindow):
 
         # Header in red at 2x size using framebuf2
         # fb2_red = fb2.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
-        self.imagered.large_text("Lämpötilat", 10, 10, 2, 1)
+
+        w_red20 = Writer(self.imagered, fifont20)
+        Writer.set_textpos(self.imagered, 10, 10)
+        w_red20.printstring("Lämpötilat")
+
+        # self.imagered.large_text("Lämpötilat", 10, 10, 2, 1)
         self.imageblack.text("ulkona lämpö", 10, 40, 0x00)
         self.imagered.text("ulkorakennus", 10, 70, 0x00)
         self.imageblack.text("autotalli", 10, 100, 0x00)
@@ -269,7 +274,6 @@ class TempereratureWindow(FrameWindow):
         w_red = Writer(self.imagered, fifont10)
         Writer.set_textpos(self.imagered, 140, 200)
         w_red.printstring("Lämpötilat")
-
 
     # def display(self):
     #     print("TempereratureWindow display")
@@ -373,16 +377,19 @@ class ElectricityWindow(FrameWindow):
 
         self.imageblack.text("Hinta nyt", 10, 10, 0x00)
 
-        self.imageblack.fill_rect(10, 32, 20, 20, 0xff)
+        self.imageblack.fill_rect(10, 32, 20, 80, 0xff)
+        # Writer jättää partial päivityksen kanssa haamuja
         Writer.set_textpos(self.imageblack, 32, 10)
 
         if show_price_red:
             w_black = Writer(self.imageblack, fifont20, verbose=False)
-            w_black.printstring(current_price_text)
+            w_black.printstring(current_price_text, invert=True)
+            # self.imageblack.text(str(current_price_text), 10, 32, 0x00)
         else:
-            w_black = Writer(self.imageblack, fifont10, verbose=False)
-            w_black.printstring(current_price_text)
-            # self.imageblack.text(current_price_text, 10, 32, 0x00)
+            w_black = Writer(self.imageblack, fifont20, verbose=False)
+            w_black.printstring(current_price_text, invert=True)
+
+            # self.imageblack.text(str(current_price_text), 10, 32, 0x00)
 
         graph_left = self.width - 190
         graph_top = 20
@@ -424,7 +431,7 @@ class ElectricityWindow(FrameWindow):
         self.epd.blit(self.imageblack, self.imagered, self.Xstart, self.Ystart)        
         # self.epd.display()
 
-        self.epd.display_Base_color(0xFF)
+        # self.epd.display_Base_color(0xFF)
         self.epd.init_part()
         self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
 
@@ -891,7 +898,7 @@ def show_finnish_test_page(epd):
 
     # Black layer lines
     Writer.set_textpos(epd.imageblack, 40, 10)
-    w_black.printstring("Perus: abcdefghijklmnopqrstuvwxyz åäö")
+    w_black.printstring("Perus: abcdefghijklmnopqrstuvwxyz åäö", invert=True)
     Writer.set_textpos(epd.imageblack, 60, 10)
     w_black.printstring("Kapiteelit: ABCDEFGHIJKLMNOPQRSTUVWXYZ ÅÄÖ")
     Writer.set_textpos(epd.imageblack, 80, 10)
@@ -942,56 +949,8 @@ if __name__=='__main__':
     epd.TurnOnDisplay()
     epd.delay_ms(2000)
 
-    # # epd.imageblack.fill(0xff)
-    # # print("fill black")
-    # # epd.imagered.fill(0x00)
-    # # print("fill red")
-    
-    # # epd.imageblack.text("Waveshare", 5, 10, 0x00)
-    # # print("draw text 1")
-    # # epd.imagered.text("Pico_ePaper-7.5-B", 5, 40, 0xff)
-    # # print("draw text 2")
-    # # epd.imageblack.text("Raspberry Pico", 5, 70, 0x00)
-    # # print("draw text 3")
-    # # epd.display()
-    # # print("display")
 
-    # epd.delay_ms(5000)
 
-    # Base color examples: full white, then full red
-    # print("base color examples")
-    # epd.init()
-    # epd.display_Base_color(0xFF)  # set base to white
-    # epd.TurnOnDisplay()
-    # epd.delay_ms(2000)
-    # epd.display_Base_color(0x00)  # set base to red
-    # epd.TurnOnDisplay()
-    # epd.delay_ms(2000)
-    
-    # epd.imageblack.vline(10, 90, 60, 0x00)
-    # epd.imageblack.vline(120, 90, 60, 0x00)
-    # epd.imagered.hline(10, 90, 110, 0xff)
-    # epd.imagered.hline(10, 150, 110, 0xff)
-    # epd.imagered.line(10, 90, 120, 150, 0xff)
-    # epd.imagered.line(120, 90, 10, 150, 0xff)
-    # epd.display()
-    # epd.delay_ms(5000)
-    
-    # epd.imageblack.rect(10, 180, 50, 80, 0x00 )
-    # epd.imageblack.fill_rect(70, 180, 50, 80,0x00 )
-    # epd.imagered.rect(10, 300, 50, 80, 0xff )
-    # epd.imagered.fill_rect(70, 300, 50, 80,0xff )
-    # epd.display()
-    # epd.delay_ms(5000)
-
-    # for k in range(0, 3):
-    #     for j in range(0, 3):
-    #         for i in range(0, 5):
-    #             epd.imageblack.fill_rect(200+100+j*200, i*20+k*200, 100, 10, 0x00)
-    #         for i in range(0, 5):
-    #             epd.imagered.fill_rect(200+0+j*200, i*20+100+k*200, 100, 10, 0xff)
-    # epd.display()
-    # epd.delay_ms(5000)
 
     # partial update
     print("partial start")
@@ -1022,13 +981,7 @@ if __name__=='__main__':
 
     for i in range(0, 4):
         print("partial loop")
-        # # win2.imageblack.fill(0xff)
-        # # win2.imagered.fill(0x00)
-        # win2.imageblack.fill_rect(40, 40, 10, 20, 0xff)
-        # win2.imageblack.text(str(i), 41, 41, 0x00)
-        # # mustana tämä (61,61) toimii mutta ei punaisena
-        # win2.imagered.text(str(i), 61, 61, 0x00)
-        # win2.display()
+
         epd.imageblack_win1.fill(0xff)
         epd.imageblack_win1.fill_rect(0, 0, 10, 20, 0xff)
         epd.imageblack_win1.fill_rect(0, 30, 10, 20, 0x00)
@@ -1036,30 +989,9 @@ if __name__=='__main__':
         epd.imageblack_win1.fill_rect(40, 40, 10, 20, 0xff)
         epd.imageblack_win1.text(str(i), 41, 41, 0x00)
 
-        # epd.imageblack_win1.text(str(i), 20, 80, 0x00)
-        # epd.imageblack_win1.text(str(i+20), 2, 2, 0x00)
-        # epd.imageblack_win1.pixel(30, 30, 0xff)
-        # epd.imageblack_win1.pixel(31, 30, 0xff)
-        # epd.imageblack_win1.pixel(30, 31, 0xff)
-        # epd.imageblack_win1.pixel(31, 31, 0x00)
-        # epd.display_Partial(epd.buffer_black, 0, 0, 800, 480)
-        # epd.display_Partial(epd.buffer_black_win1, 10, 10, 170, 90)
+
         epd.display_Partial(epd.buffer_black_win1, 0, 200, 160, 280)
 
-        # epd.imageblack.fill_rect(175, 105, 100, 20, 0xff)
-        # epd.imageblack.text(str(i), 177, 106, 0x00)
-        # epd.imageblack.text(str(i+20), 2, 2, 0x00)
-        # # epd.display_Partial(epd.buffer_black, 0, 0, 800, 480)
-        # epd.display_Partial(epd.buffer_black, 10, 10, 200, 200)
-
-        # epd.imagered.fill_rect(375, 105, 100, 20, 0x00)
-        # epd.imagered.text("pidempi teksti", 386, 116, 0xff) # tämähän ei toimi ?
-        # epd.display_Partial(epd.buffer_red, 0, 0, 800, 480)
-        # Päivitä vain uudet alueet (pyöristetty 8 pikselin tarkkuuteen)
-        # Musta alue (rect + teksti)
-        # epd.display_Partial_Both(epd.buffer_black, epd.buffer_red, 168, 96, 280, 132)
-        # Punainen alue (rect + teksti)
-        # epd.display_Partial_Both(epd.buffer_black, epd.buffer_red, 0, 0, 800, 480)
         print("partial loop end")
         epd.delay_ms(2000)
             
