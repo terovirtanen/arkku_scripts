@@ -70,7 +70,7 @@ def get_price_data(cursor, hours_forward=2):
     query = """
     SELECT timestamp, price 
     FROM prices 
-    WHERE timestamp >= %s AND timestamp <= %s
+    WHERE timestamp >= %s AND timestamp < %s
     ORDER BY timestamp ASC
     """
 
