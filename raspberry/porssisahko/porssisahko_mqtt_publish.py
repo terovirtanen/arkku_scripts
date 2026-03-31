@@ -62,18 +62,19 @@ def get_price_data(cursor, hours_forward=2):
     """Get price data from database for the next N hours."""
     timezone = pytz.timezone("Europe/Helsinki")
     now = datetime.now(timezone)
-    
-    # Calculate time range from now to N hours forward
-    end_time = now + timedelta(hours=hours_forward)
-    
+    start_time = now.replace(minute=0, second=0, microsecond=0)
+
+    # Calculate time range from current hour to N hours forward
+    end_time = start_time + timedelta(hours=hours_forward)
+
     query = """
     SELECT timestamp, price 
     FROM prices 
     WHERE timestamp >= %s AND timestamp <= %s
     ORDER BY timestamp ASC
     """
-    
-    cursor.execute(query, (now, end_time))
+
+    cursor.execute(query, (start_time, end_time))
     return cursor.fetchall()
 
 
