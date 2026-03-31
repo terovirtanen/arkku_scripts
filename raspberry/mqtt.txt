@@ -1,9 +1,9 @@
 Kanavat
 
 porssisahko/prices/short
-    seuraavan 2 tunnnin pörssisähkötiedot json muodossa,  {"2026-1-15": {"19": [14, 12, 12, 11], "20": [11, 11, 11, 10]}}
+    seuraavan 2 tunnin pörssisähkötiedot json muodossa,  {"2026-1-15": {"19": [14, 12, 12, 11], "20": [11, 11, 11, 10]}}
 porssisahko/prices/long
-    seuraavan 6 tunnnin pörssisähkötiedot json muodossa,  {"2026-1-15": {"19": [14, 12, 12, 11], "20": [11, 11, 11, 10] <+ 4h lisää>}}
+    seuraavan 6 tunnin pörssisähkötiedot json muodossa,  {"2026-1-15": {"19": [14, 12, 12, 11], "20": [11, 11, 11, 10] <+ 4h lisää>}}
 garage/temperature
     autotallin lämpötila, json {"2026-01-15T19:45:30": 15.2}
 warehouse/temperature

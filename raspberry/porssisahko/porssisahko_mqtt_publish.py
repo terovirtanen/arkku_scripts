@@ -30,7 +30,8 @@ def load_config():
         'mqtt_port': int(os.getenv('MQTT_PORT', 1883)),
         'mqtt_username': os.getenv('MQTT_USERNAME'),
         'mqtt_password': os.getenv('MQTT_PASSWORD'),
-        'mqtt_topic': os.getenv('MQTT_TOPIC', 'porssisahko/prices'),
+        'mqtt_topic_short': os.getenv('MQTT_TOPIC_SHORT', 'porssisahko/prices/short'),
+        'mqtt_topic_long': os.getenv('MQTT_TOPIC_LONG', 'porssisahko/prices/long'),
         'mqtt_client_id': os.getenv('MQTT_CLIENT_ID', 'porssisahko_publisher')
     }
     
@@ -106,7 +107,7 @@ def format_price_data(price_data, timezone):
     return formatted_data
 
 
-def publish_to_mqtt(config, data):
+def publish_to_mqtt(config, topic, data):
     """Publish data to MQTT broker."""
     client = mqtt.Client(client_id=config['mqtt_client_id'])
     
@@ -120,10 +121,10 @@ def publish_to_mqtt(config, data):
         
         # Publish data
         json_data = json.dumps(data)
-        result = client.publish(config['mqtt_topic'], json_data, qos=1, retain=True)
+        result = client.publish(topic, json_data, qos=1, retain=True)
         
         if result.rc == mqtt.MQTT_ERR_SUCCESS:
-            print(f"Successfully published to MQTT topic: {config['mqtt_topic']}")
+            print(f"Successfully published to MQTT topic: {topic}")
             print(f"Data size: {len(json_data)} bytes")
             return True
         else:
@@ -151,30 +152,41 @@ def main():
         cursor = connection.cursor()
         
         try:
-            # Get price data for last 2 hours
-            price_data = get_price_data(cursor, hours_back=2)
-            
-            if not price_data:
+            # Get short price data (last 2 hours)
+            price_data_short = get_price_data(cursor, hours_back=2)
+            # Get long price data (last 6 hours)
+            price_data_long = get_price_data(cursor, hours_back=6)
+
+            if not price_data_short and not price_data_long:
+                print("No price data found")
+                return 1
+
+            success = True
+
+            # Publish short data
+            if price_data_short:
+                print(f"Retrieved {len(price_data_short)} price records for short (2h)")
+                formatted_short = format_price_data(price_data_short, timezone)
+                if formatted_short:
+                    success &= publish_to_mqtt(config, config['mqtt_topic_short'], formatted_short)
+                else:
+                    print("No formatted short data to publish")
+            else:
                 print("No price data found for the last 2 hours")
-                return 1
-            
-            print(f"Retrieved {len(price_data)} price records from database")
-            
-            # Format data
-            formatted_data = format_price_data(price_data, timezone)
-            
-            if not formatted_data:
-                print("No formatted data to publish")
-                return 1
-            
-            # Publish to MQTT
-            success = publish_to_mqtt(config, formatted_data)
-            
+
+            # Publish long data
+            if price_data_long:
+                print(f"Retrieved {len(price_data_long)} price records for long (6h)")
+                formatted_long = format_price_data(price_data_long, timezone)
+                if formatted_long:
+                    success &= publish_to_mqtt(config, config['mqtt_topic_long'], formatted_long)
+                else:
+                    print("No formatted long data to publish")
+            else:
+                print("No price data found for the last 6 hours")
+
             if success:
                 print("Price data published successfully")
-                # Print sample of published data
-                print("Published data sample:")
-                print(json.dumps(formatted_data, indent=2)[:500] + "...")
                 return 0
             else:
                 print("Failed to publish price data")
