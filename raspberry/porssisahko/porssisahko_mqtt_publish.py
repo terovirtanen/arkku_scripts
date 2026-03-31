@@ -58,13 +58,13 @@ def create_database_connection(config):
         raise
 
 
-def get_price_data(cursor, hours_back=2):
-    """Get price data from database for the last N hours."""
+def get_price_data(cursor, hours_forward=2):
+    """Get price data from database for the next N hours."""
     timezone = pytz.timezone("Europe/Helsinki")
     now = datetime.now(timezone)
     
-    # Calculate time range for last N hours
-    start_time = now - timedelta(hours=hours_back)
+    # Calculate time range from now to N hours forward
+    end_time = now + timedelta(hours=hours_forward)
     
     query = """
     SELECT timestamp, price 
@@ -73,7 +73,7 @@ def get_price_data(cursor, hours_back=2):
     ORDER BY timestamp ASC
     """
     
-    cursor.execute(query, (start_time, now))
+    cursor.execute(query, (now, end_time))
     return cursor.fetchall()
 
 
@@ -109,7 +109,7 @@ def format_price_data(price_data, timezone):
 
 def publish_to_mqtt(config, topic, data):
     """Publish data to MQTT broker."""
-    client = mqtt.Client(client_id=config['mqtt_client_id'])
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=config['mqtt_client_id'])
     
     # Set username and password if provided
     if config['mqtt_username'] and config['mqtt_password']:
@@ -152,10 +152,10 @@ def main():
         cursor = connection.cursor()
         
         try:
-            # Get short price data (last 2 hours)
-            price_data_short = get_price_data(cursor, hours_back=2)
-            # Get long price data (last 6 hours)
-            price_data_long = get_price_data(cursor, hours_back=6)
+            # Get short price data (next 2 hours)
+            price_data_short = get_price_data(cursor, hours_forward=2)
+            # Get long price data (next 6 hours)
+            price_data_long = get_price_data(cursor, hours_forward=6)
 
             if not price_data_short and not price_data_long:
                 print("No price data found")
