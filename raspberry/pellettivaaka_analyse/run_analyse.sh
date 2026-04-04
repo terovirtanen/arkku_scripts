@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # Configuration: set parameters here
-START="2026-02-01 00:00:00"
-END="2026-02-05 00:00:00"
+# kulutus 2021-01-21 - 2026-01-31: säkillinen eli 500kg
+START="2026-01-21 00:00:00"
+END="2026-04-4 00:00:00"
 PASSWORD="${1:-}"
 HOST="192.168.100.50"
 DB="pellet_scale"
@@ -13,8 +14,9 @@ CSV_OUT=""
 PLOT_OUT=""  # e.g. "weight.png"
 SHOW_PLOT="false"  # true/false
 # Consumption calc (leave false to skip)
-CONSUMPTION="false"  # true/false
+CONSUMPTION="true"  # true/false
 THRESHOLD="0.1"
+DEBUG="false"  # true/false to print rows and consumption events
 
 # Resolve script directory and ensure project virtual environment exists
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -72,7 +74,9 @@ fi
 if [[ "${CONSUMPTION}" == "true" ]]; then
   ARGS+=("--consumption" "--threshold" "$THRESHOLD")
 fi
-
+if [[ "${DEBUG}" == "true" ]]; then
+  ARGS+=("--print-rows" "--print-consumption-events")
+fi
 # Export password for the script
 export PELLET_DB_PASSWORD="$PASSWORD"
 

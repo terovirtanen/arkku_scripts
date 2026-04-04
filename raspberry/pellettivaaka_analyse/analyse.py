@@ -18,7 +18,9 @@ Outputs:
 - Prints fetched rows count and a summary
 - Prints min/max/avg weights
 - Prints first/last weights and delta
-- Prints simple consumption deltas between consecutive points
+- Prints daily/weekly/monthly/yearly/all-time consumption summaries with --consumption
+- Optional all-row output via --print-rows
+- Optional consumption event output via --print-consumption-events
 - Optional CSV output via --csv path
 """
 import os
@@ -40,6 +42,8 @@ except Exception as e:
     raise
 
 ROW = Tuple[datetime, float]
+# tällä korjauskertoimella kulutus vastaa tarpeeksi lähelle todellista kulutusta
+CONSUMPTION_CORRECTION_FACTOR = 175.0 / 140.0 * 2.1
 
 
 def parse_dt(s: str) -> datetime:
@@ -126,9 +130,13 @@ def analyze_weight_data(df: "pd.DataFrame") -> Dict[str, Any]:
 
 # No summary processing: only fetch and output rows (time, weight)
 
-def compute_consumption(df: "pd.DataFrame", threshold: float = 0.1) -> Dict[str, Any]:
+def compute_consumption(
+    df: "pd.DataFrame",
+    threshold: float = 0.1,
+) -> Dict[str, Any]:
     """
     Käy rivit läpi aika-järjestyksessä ja laskee kulutuksen.
+    - Jokainen weight-arvo korjataan ensin vakiokorjauskertoimella
     - Jos seuraava weight kasvaa >= threshold -> täyttö (refill)
     - Jos muutos on välillä (-threshold, +threshold) -> anturin kohinaa, skip
     - Jos seuraava weight alenee <= -threshold -> kulutus, lisätään kulutukseen (positiivisena)
@@ -145,7 +153,8 @@ def compute_consumption(df: "pd.DataFrame", threshold: float = 0.1) -> Dict[str,
         }
 
     work = df[["time", "weight"]].copy()
-    work["diff"] = work["weight"].diff()
+    work["corrected_weight"] = work["weight"] * CONSUMPTION_CORRECTION_FACTOR
+    work["diff"] = work["corrected_weight"].diff()
     work["from_time"] = work["time"].shift(1)
     work = work.iloc[1:].copy()
 
@@ -190,15 +199,30 @@ def compute_consumption(df: "pd.DataFrame", threshold: float = 0.1) -> Dict[str,
     }
 
 
-def compute_daily_consumption(df: "pd.DataFrame", threshold: float = 0.1) -> "pd.DataFrame":
-    """Laskee päiväkohtaisen kulutuksen ja täytöt pandasilla."""
+def _compute_grouped_consumption(
+    df: "pd.DataFrame",
+    group_label: str,
+    threshold: float = 0.1,
+) -> "pd.DataFrame":
+    """Laskee ryhmitellyn kulutuksen ja täytöt pandasilla."""
     if df.empty or len(df) < 2:
-        return pd.DataFrame(columns=["date", "consumption_kg", "refill_kg", "consumption_segments", "refill_segments"])
+        return pd.DataFrame(columns=[group_label, "consumption_kg", "refill_kg", "consumption_segments", "refill_segments"])
 
     work = df[["time", "weight"]].copy()
-    work["diff"] = work["weight"].diff()
+    work["corrected_weight"] = work["weight"] * CONSUMPTION_CORRECTION_FACTOR
+    work["diff"] = work["corrected_weight"].diff()
     work = work.iloc[1:].copy()
-    work["date"] = work["time"].dt.date
+
+    if group_label == "date":
+        work[group_label] = work["time"].dt.date
+    elif group_label == "week":
+        work[group_label] = work["time"].dt.strftime("%G-W%V")
+    elif group_label == "month":
+        work[group_label] = work["time"].dt.strftime("%Y-%m")
+    elif group_label == "year":
+        work[group_label] = work["time"].dt.strftime("%Y")
+    else:
+        raise ValueError(f"Unsupported group label: {group_label}")
 
     work["consumption_kg"] = 0.0
     work.loc[work["diff"] <= -threshold, "consumption_kg"] = -work.loc[work["diff"] <= -threshold, "diff"]
@@ -209,18 +233,71 @@ def compute_daily_consumption(df: "pd.DataFrame", threshold: float = 0.1) -> "pd
     work["consumption_segment"] = (work["diff"] <= -threshold).astype(int)
     work["refill_segment"] = (work["diff"] >= threshold).astype(int)
 
-    daily = (
-        work.groupby("date", as_index=False)
+    summary = (
+        work.groupby(group_label, as_index=False)
         .agg(
             consumption_kg=("consumption_kg", "sum"),
             refill_kg=("refill_kg", "sum"),
             consumption_segments=("consumption_segment", "sum"),
             refill_segments=("refill_segment", "sum"),
         )
-        .sort_values("date")
+        .sort_values(group_label)
         .reset_index(drop=True)
     )
-    return daily
+    return summary
+
+
+def compute_daily_consumption(
+    df: "pd.DataFrame",
+    threshold: float = 0.1,
+) -> "pd.DataFrame":
+    """Laskee päiväkohtaisen kulutuksen ja täytöt pandasilla."""
+    return _compute_grouped_consumption(df, "date", threshold=threshold)
+
+
+def compute_weekly_consumption(
+    df: "pd.DataFrame",
+    threshold: float = 0.1,
+) -> "pd.DataFrame":
+    """Laskee viikkokohtaisen kulutuksen ja täytöt pandasilla."""
+    return _compute_grouped_consumption(df, "week", threshold=threshold)
+
+
+def compute_monthly_consumption(
+    df: "pd.DataFrame",
+    threshold: float = 0.1,
+) -> "pd.DataFrame":
+    """Laskee kuukausikohtaisen kulutuksen ja täytöt pandasilla."""
+    return _compute_grouped_consumption(df, "month", threshold=threshold)
+
+
+def compute_yearly_consumption(
+    df: "pd.DataFrame",
+    threshold: float = 0.1,
+) -> "pd.DataFrame":
+    """Laskee vuosikohtaisen kulutuksen ja täytöt pandasilla."""
+    return _compute_grouped_consumption(df, "year", threshold=threshold)
+
+
+def compute_total_consumption_summary(
+    df: "pd.DataFrame",
+    threshold: float = 0.1,
+) -> Dict[str, Any]:
+    """Laskee kokonaissumman koko aikavälille."""
+    daily = compute_daily_consumption(df, threshold=threshold)
+    if daily.empty:
+        return {
+            "consumption_kg": 0.0,
+            "refill_kg": 0.0,
+            "consumption_segments": 0,
+            "refill_segments": 0,
+        }
+    return {
+        "consumption_kg": float(daily["consumption_kg"].sum()),
+        "refill_kg": float(daily["refill_kg"].sum()),
+        "consumption_segments": int(daily["consumption_segments"].sum()),
+        "refill_segments": int(daily["refill_segments"].sum()),
+    }
 
 
 def plot_weight(rows: List[ROW], outfile: Optional[str] = None, title: Optional[str] = None, ylabel: str = "Weight (kg)") -> None:
@@ -277,6 +354,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--csv", help="Optional CSV output path")
     ap.add_argument("--daily-csv", help="Optional daily consumption summary CSV output path")
     ap.add_argument("--consumption", action="store_true", help="Laske ja tulosta kulutus (kynnys oletus 0.1)")
+    ap.add_argument("--print-rows", action="store_true", help="Tulosta kaikki mittausrivit stdoutiin")
+    ap.add_argument("--print-consumption-events", action="store_true", help="Tulosta yksittäiset kulutustapahtumat stdoutiin (vaatii --consumption)")
     ap.add_argument("--threshold", type=float, default=0.1, help="Kynnysarvo kg (oletus 0.1)")
     ap.add_argument("--plot", help="Tallenna kuvaaja polkuun (esim. out.png)")
     ap.add_argument("--show-plot", action="store_true", help="Näytä kuvaaja näytöllä")
@@ -315,8 +394,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         daily.to_csv(args.daily_csv, index=False)
         print(f"Daily CSV written: {args.daily_csv}")
 
-    # Print rows to stdout (time,weight)
-    if not df.empty:
+    # Print rows to stdout (time,weight) only when requested
+    if args.print_rows and not df.empty:
         print("Rows:")
         for row in df.itertuples(index=False):
             print(f"  {row.time.strftime('%Y-%m-%d %H:%M:%S')}, {float(row.weight)}")
@@ -324,7 +403,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.consumption:
         cons = compute_consumption(df, threshold=args.threshold)
         print("Consumption:")
-        print(f"  total: {cons['total_consumption']:.3f}")
+        print(f"  total: {cons['total_consumption']:.3f} (correction factor {CONSUMPTION_CORRECTION_FACTOR:.6f})")
         print(f"  refills: {cons['refill_count']}  segments: {cons['consumption_count']}  noise_skipped: {cons['noise_skipped']}")
 
         daily = compute_daily_consumption(df, threshold=args.threshold)
@@ -337,12 +416,51 @@ def main(argv: Optional[List[str]] = None) -> int:
                     f"({int(row.refill_segments)} seg)"
                 )
 
-        # Tulosta vain kulutus-tapahtumat lyhyesti
-        for e in cons["events"]:
-            if e["type"] == "consumption":
-                ft = e["from_time"].strftime('%Y-%m-%d %H:%M:%S')
-                tt = e["to_time"].strftime('%Y-%m-%d %H:%M:%S')
-                print(f"    {ft} -> {tt}: -{e['delta']:.3f}")
+        weekly = compute_weekly_consumption(df, threshold=args.threshold)
+        if not weekly.empty:
+            print("Weekly consumption summary (pandas):")
+            for row in weekly.itertuples(index=False):
+                print(
+                    f"  {row.week}: consumption={float(row.consumption_kg):.3f} kg "
+                    f"({int(row.consumption_segments)} seg), refill={float(row.refill_kg):.3f} kg "
+                    f"({int(row.refill_segments)} seg)"
+                )
+
+        monthly = compute_monthly_consumption(df, threshold=args.threshold)
+        if not monthly.empty:
+            print("Monthly consumption summary (pandas):")
+            for row in monthly.itertuples(index=False):
+                print(
+                    f"  {row.month}: consumption={float(row.consumption_kg):.3f} kg "
+                    f"({int(row.consumption_segments)} seg), refill={float(row.refill_kg):.3f} kg "
+                    f"({int(row.refill_segments)} seg)"
+                )
+
+        yearly = compute_yearly_consumption(df, threshold=args.threshold)
+        if not yearly.empty:
+            print("Yearly consumption summary (pandas):")
+            for row in yearly.itertuples(index=False):
+                print(
+                    f"  {row.year}: consumption={float(row.consumption_kg):.3f} kg "
+                    f"({int(row.consumption_segments)} seg), refill={float(row.refill_kg):.3f} kg "
+                    f"({int(row.refill_segments)} seg)"
+                )
+
+        total = compute_total_consumption_summary(df, threshold=args.threshold)
+        print("All-time consumption summary:")
+        print(
+            f"  all: consumption={float(total['consumption_kg']):.3f} kg "
+            f"({int(total['consumption_segments'])} seg), refill={float(total['refill_kg']):.3f} kg "
+            f"({int(total['refill_segments'])} seg)"
+        )
+
+        # Tulosta kulutus-tapahtumat lyhyesti vain pyydettäessä
+        if args.print_consumption_events:
+            for e in cons["events"]:
+                if e["type"] == "consumption":
+                    ft = e["from_time"].strftime('%Y-%m-%d %H:%M:%S')
+                    tt = e["to_time"].strftime('%Y-%m-%d %H:%M:%S')
+                    print(f"    {ft} -> {tt}: {e['delta']:.3f}")
 
     if args.plot or args.show_plot:
         title = f"Weight over time ({start} .. {end})"
