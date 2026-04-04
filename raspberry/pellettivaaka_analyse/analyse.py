@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""
+r"""
 Pellet scale analysis tool.
 
 Fetch rows by time range from MySQL and process measurements.
 
 DB connection:
 - host: 192.168.100.50
-- database: pellet_measurements
+- database: pellet_scale
 - user: admin
 - password: from CLI arg --password or env var PELLET_DB_PASSWORD
 
@@ -54,7 +54,7 @@ def parse_dt(s: str) -> datetime:
     raise ValueError(f"Invalid datetime: {s}")
 
 
-def fetch_rows(start: datetime, end: datetime, password: str, host: str = "192.168.100.50", db: str = "pellet_measurements", user: str = "admin") -> List[ROW]:
+def fetch_rows(start: datetime, end: datetime, password: str, host: str = "192.168.100.50", db: str = "pellet_scale", user: str = "admin") -> List[ROW]:
     conn = mysql.connector.connect(host=host, database=db, user=user, password=password)
     try:
         cur = conn.cursor()
@@ -272,7 +272,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--end", required=True, help="End time (YYYY-MM-DD[ HH:MM[:SS]])")
     ap.add_argument("--password", help="DB password (or set env PELLET_DB_PASSWORD)")
     ap.add_argument("--host", default="192.168.100.50")
-    ap.add_argument("--db", default="pellet_measurements")
+    ap.add_argument("--db", default="pellet_scale")
     ap.add_argument("--user", default="admin")
     ap.add_argument("--csv", help="Optional CSV output path")
     ap.add_argument("--daily-csv", help="Optional daily consumption summary CSV output path")

@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Configuration: set parameters here
 START="2026-02-01 00:00:00"
-END="2026-02-02 00:00:00"
-PASSWORD="CHANGEME"
+END="2026-02-05 00:00:00"
+PASSWORD="${1:-}"
 HOST="192.168.100.50"
-DB="pellet_measurements"
+DB="pellet_scale"
 USER="admin"
 # Optional outputs (leave empty to skip)
 CSV_OUT=""
@@ -16,16 +16,39 @@ SHOW_PLOT="false"  # true/false
 CONSUMPTION="false"  # true/false
 THRESHOLD="0.1"
 
-# Resolve script directory and Python
+# Resolve script directory and ensure project virtual environment exists
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PY="${PYTHON_BIN:-python3}"
-if ! command -v "$PY" >/dev/null 2>&1; then
-  if command -v python >/dev/null 2>&1; then
-    PY="python"
+VENV_DIR="${VENV_DIR:-$SCRIPT_DIR/.venv}"
+
+if [[ ! -x "$VENV_DIR/bin/python" ]]; then
+  echo "Creating virtual environment: $VENV_DIR"
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -m venv "$VENV_DIR"
+  elif command -v python >/dev/null 2>&1; then
+    python -m venv "$VENV_DIR"
   else
-    echo "Python interpreter not found (looked for python3/python)." >&2
+    echo "Python interpreter not found for creating virtual environment." >&2
     exit 1
   fi
+fi
+
+# Ensure required packages are installed or repaired in the virtual environment
+"$VENV_DIR/bin/python" -m pip install --upgrade pip >/dev/null
+"$VENV_DIR/bin/python" -m pip install -r "$SCRIPT_DIR/requirements.txt"
+
+# shellcheck disable=SC1091
+source "$VENV_DIR/bin/activate"
+
+PY="${PYTHON_BIN:-$VENV_DIR/bin/python}"
+if [[ ! -x "$PY" ]]; then
+  echo "Python interpreter not found in virtual environment: $PY" >&2
+  exit 1
+fi
+
+if [[ -z "$PASSWORD" ]]; then
+  echo "Usage: $0 <db_password>" >&2
+  exit 1
 fi
 
 # Build args
