@@ -29,6 +29,7 @@
 
 
 from umqtt.simple import MQTTClient
+import ntptime
 import ubinascii
 import ujson
 import time
@@ -36,6 +37,8 @@ import network
 # own library
 import config
 import EPD_7in5_B
+from window_heating import WindowHeating
+from window_spot_prices import WindowSpotPrices
 from window_temperature import WindowTemperature
 
 print(dir(time))
@@ -100,6 +103,12 @@ class MqttConnection:
         config.mqtt_topic_outdoor_temperature: 'outdoor',
         config.mqtt_topic_warehouse_temperature: 'warehouse',
         config.mqtt_topic_garage_temperature: 'garage',
+        config.mqtt_topic_heating_tank_down_temperature: 'heating_tank_down',
+        config.mqtt_topic_heating_tank_up_temperature: 'heating_tank_up',
+        config.mqtt_topic_heating_tank_resistance_running: 'heating_tank_resistance_running',
+        config.mqtt_topic_heating_boiler_temperature: 'heating_boiler_temperature',
+        config.mqtt_topic_heating_boiler_running: 'heating_boiler_running',
+        config.mqtt_topic_spot_prices_long: 'spot_prices_long',
     }
 
     def __init__(
@@ -145,6 +154,18 @@ class MqttConnection:
             self._log('Warehouse temperature received: %s °C' % value)
         if topic == config.mqtt_topic_garage_temperature:
             self._log('Garage temperature received: %s °C' % value)
+        if topic == config.mqtt_topic_heating_tank_down_temperature:
+            self._log('Heating tank down temperature received: %s °C' % value)
+        if topic == config.mqtt_topic_heating_tank_up_temperature:
+            self._log('Heating tank up temperature received: %s °C' % value)
+        if topic == config.mqtt_topic_heating_tank_resistance_running:
+            self._log('Heating tank resistance running received: %s' % value)
+        if topic == config.mqtt_topic_heating_boiler_temperature:
+            self._log('Heating boiler temperature received: %s °C' % value)
+        if topic == config.mqtt_topic_heating_boiler_running:
+            self._log('Heating boiler running received: %s' % value)
+        if topic == config.mqtt_topic_spot_prices_long:
+            self._log('Spot prices received')
 
     def _topic_name(self, topic):
         return self.TOPIC_NAMES.get(topic, self._decode_message(topic))
@@ -165,12 +186,11 @@ class MqttConnection:
 
                 if len(data) == 1:
                     for _, value in data.items():
-                        if isinstance(value, (int, float)):
+                        if isinstance(value, (int, float, bool)):
                             # config.debug_print('Decoded MQTT message single value: %s' % value)
                             return value
 
-                # config.debug_print('Decoded MQTT message no temperature key, fallback to raw string')
-                return decoded_str
+                return data
 
             if isinstance(data, (int, float)):
                 return data
@@ -212,6 +232,12 @@ class MqttConnection:
             'outdoor': self.get_message('outdoor'),
             'warehouse': self.get_message('warehouse'),
             'garage': self.get_message('garage'),
+            'heating_tank_down': self.get_message('heating_tank_down'),
+            'heating_tank_up': self.get_message('heating_tank_up'),
+            'heating_tank_resistance_running': self.get_message('heating_tank_resistance_running', False),
+            'heating_boiler_temperature': self.get_message('heating_boiler_temperature'),
+            'heating_boiler_running': self.get_message('heating_boiler_running', False),
+            'spot_prices_long': self.get_message('spot_prices_long'),
         }
 
     def disconnect(self):
@@ -250,6 +276,15 @@ def wlan_connect():
         raise
 
 
+def sync_time_with_ntp():
+    try:
+        config.debug_print('Syncing RTC with NTP')
+        ntptime.settime()
+        config.debug_print('RTC synced: %s' % (time.localtime(),))
+    except OSError as error:
+        config.debug_print('NTP sync failed: %s' % error)
+
+
 def mqtt_connect_and_subscribe():
     mqtt_connection = MqttConnection(
         config.client_id,
@@ -263,15 +298,101 @@ def mqtt_connect_and_subscribe():
     mqtt_connection.connect_and_subscribe()
     return mqtt_connection
 
-def listen_for_messages(client, win_temp=None):
+
+def _parse_spot_day_key(day_key):
+    parts = day_key.split('-')
+    if len(parts) != 3:
+        raise ValueError('Invalid day key: %s' % day_key)
+    return (int(parts[0]), int(parts[1]), int(parts[2]))
+
+
+def _build_spot_price_points(spot_prices_long):
+    if not isinstance(spot_prices_long, dict):
+        return []
+
+    points = []
+    for day_key, hours in spot_prices_long.items():
+        try:
+            year, month, day = _parse_spot_day_key(day_key)
+        except ValueError:
+            continue
+
+        if not isinstance(hours, dict):
+            continue
+
+        for hour_key, quarters in hours.items():
+            try:
+                hour = int(hour_key)
+            except ValueError:
+                continue
+
+            if not isinstance(quarters, list):
+                continue
+
+            for quarter, value in enumerate(quarters):
+                if quarter > 3:
+                    break
+                if isinstance(value, (int, float)):
+                    points.append((year, month, day, hour, quarter, value))
+
+    points.sort()
+    return points
+
+
+def _resolve_spot_prices(spot_prices_long):
+    points = _build_spot_price_points(spot_prices_long)
+    if not points:
+        return (None, [])
+
+    now = time.localtime()
+    current_marker = (now[0], now[1], now[2], now[3], now[4] // 15)
+
+    current_price = None
+    future_points = []
+    for year, month, day, hour, quarter, value in points:
+        marker = (year, month, day, hour, quarter)
+        if marker == current_marker and current_price is None:
+            current_price = value
+        if marker >= current_marker:
+            future_points.append((hour, quarter, value))
+
+    if current_price is None:
+        if future_points:
+            current_price = future_points[0][2]
+        else:
+            current_price = points[-1][5]
+
+    return (current_price, future_points)
+
+def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices=None):
     try:
         # Fetch all initial values
         current_values = client.get_current_values()
         outdoor = current_values['outdoor']
         warehouse = current_values['warehouse']
         garage = current_values['garage']
+        heating_tank_down = current_values['heating_tank_down']
+        heating_tank_up = current_values['heating_tank_up']
+        heating_tank_resistance_running = current_values['heating_tank_resistance_running']
+        heating_boiler_temperature = current_values['heating_boiler_temperature']
+        heating_boiler_running = current_values['heating_boiler_running']
+        spot_prices_long = current_values['spot_prices_long']
+        current_spot_price, future_spot_prices = _resolve_spot_prices(spot_prices_long)
         
-        config.debug_print('Initial values: outdoor=%s, warehouse=%s, garage=%s' % (outdoor, warehouse, garage))
+        config.debug_print(
+            'Initial values: outdoor=%s, warehouse=%s, garage=%s, tank_down=%s, tank_up=%s, tank_resistance_running=%s, boiler_temperature=%s, boiler_running=%s, current_spot_price=%s'
+            % (
+                outdoor,
+                warehouse,
+                garage,
+                heating_tank_down,
+                heating_tank_up,
+                heating_tank_resistance_running,
+                heating_boiler_temperature,
+                heating_boiler_running,
+                current_spot_price,
+            )
+        )
         if win_temp is not None:
             if outdoor is not None:
                 win_temp.update_outdoor_temperature(outdoor)
@@ -279,6 +400,16 @@ def listen_for_messages(client, win_temp=None):
                 win_temp.update_outbuilding_temperature(warehouse)
             if garage is not None:
                 win_temp.update_garage_temperature(garage)
+        if win_heating is not None:
+            win_heating.update_values(
+                tank_down_temperature=heating_tank_down,
+                tank_up_temperature=heating_tank_up,
+                tank_resistance_running=heating_tank_resistance_running,
+                boiler_temperature=heating_boiler_temperature,
+                boiler_running=heating_boiler_running,
+            )
+        if win_spot_prices is not None:
+            win_spot_prices.update_prices(current_spot_price, future_spot_prices)
         
         # Listen for further changed values
         for _ in range(5):
@@ -293,6 +424,20 @@ def listen_for_messages(client, win_temp=None):
                         win_temp.update_outbuilding_temperature(changed_messages['warehouse'])
                     if 'garage' in changed_messages:
                         win_temp.update_garage_temperature(changed_messages['garage'])
+                if win_heating is not None:
+                    if 'heating_tank_down' in changed_messages:
+                        win_heating.update_tank_down_temperature(changed_messages['heating_tank_down'])
+                    if 'heating_tank_up' in changed_messages:
+                        win_heating.update_tank_up_temperature(changed_messages['heating_tank_up'])
+                    if 'heating_tank_resistance_running' in changed_messages:
+                        win_heating.update_tank_resistance_running(changed_messages['heating_tank_resistance_running'])
+                    if 'heating_boiler_temperature' in changed_messages:
+                        win_heating.update_boiler_temperature(changed_messages['heating_boiler_temperature'])
+                    if 'heating_boiler_running' in changed_messages:
+                        win_heating.update_boiler_running(changed_messages['heating_boiler_running'])
+                if win_spot_prices is not None and 'spot_prices_long' in changed_messages:
+                    current_spot_price, future_spot_prices = _resolve_spot_prices(changed_messages['spot_prices_long'])
+                    win_spot_prices.update_prices(current_spot_price, future_spot_prices)
             time.sleep(10)
     finally:
         client.disconnect()
@@ -326,6 +471,7 @@ def epd_draw_corners(epd):
 if __name__=='__main__':
     try:
         wlan = wlan_connect()
+        sync_time_with_ntp()
         mqtt = mqtt_connect_and_subscribe()
         epd = init_epd()
 
@@ -333,6 +479,12 @@ if __name__=='__main__':
         epd.imagered.fill(0x00)
 
         win_temp = WindowTemperature(epd)
+        win_heating = WindowHeating(epd)
+        win_spot_prices = WindowSpotPrices(epd)
+
+        epd.blit(win_temp.imageblack, win_temp.imagered, win_temp.Xstart, win_temp.Ystart)
+        epd.blit(win_heating.imageblack, win_heating.imagered, win_heating.Xstart, win_heating.Ystart)
+        epd.blit(win_spot_prices.imageblack, win_spot_prices.imagered, win_spot_prices.Xstart, win_spot_prices.Ystart)
 
         # epd.imageblack.text("Ulkolämpötila 15.5", 5, 10, 0x00)
         # epd.imagered.text("Sisälämpötila 22.3", 5, 40, 0xff)
@@ -355,7 +507,7 @@ if __name__=='__main__':
         # epd.delay_ms(5000)
         # time.sleep(10)
 
-        listen_for_messages(mqtt, win_temp)
+        listen_for_messages(mqtt, win_temp, win_heating, win_spot_prices)
 
     except OSError as e:
         epd_close(epd)
