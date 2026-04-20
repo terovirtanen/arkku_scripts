@@ -101,9 +101,10 @@ class WindowSpotPrices(WindowBase):
         self._draw_current_price()
         self._draw_graph()
 
-    def _refresh(self):
+    def _refresh(self, refresh=True):        
         self._redraw_black()
-        self.displayPartialBlack()
+        if refresh:
+            self.displayPartialBlack()
 
     def init(self):
         self.imageblack.fill(0xff)
@@ -111,13 +112,14 @@ class WindowSpotPrices(WindowBase):
         self._write_title()
         self._redraw_black()
 
-    def update_prices(self, current_price, price_points):
+    def update_prices(self, current_price, price_points, refresh=True):
         if price_points is None:
             price_points = []
 
-        if current_price == self.current_price and price_points == self.price_points:
+        if refresh and current_price == self.current_price and price_points == self.price_points:
             return
 
         self.current_price = current_price
         self.price_points = price_points
-        self._refresh()
+        
+        self._refresh(refresh)

@@ -195,47 +195,52 @@ class WindowHeating(WindowBase):
         self._draw_static()
         self._draw_all_dynamic()
 
-    def update_tank_down_temperature(self, temperature):
+    def update_tank_down_temperature(self, temperature, refresh=True):
         if temperature == self.tank_down_temperature:
             return
         self.tank_down_temperature = temperature
         self._clear_tank_bottom_temperature()
         self._draw_tank_bottom_temperature()
-        self._refresh()
+        if refresh:
+            self._refresh()
 
-    def update_tank_up_temperature(self, temperature):
+    def update_tank_up_temperature(self, temperature, refresh=True):
         if temperature == self.tank_up_temperature:
             return
         self.tank_up_temperature = temperature
         self._clear_tank_top_temperature()
         self._draw_tank_top_temperature()
-        self._refresh()
+        if refresh:
+            self._refresh()
 
-    def update_tank_resistance_running(self, running):
+    def update_tank_resistance_running(self, running, refresh=True):
         new_running = bool(running)
         if new_running == self.tank_resistance_running:
             return
         self.tank_resistance_running = new_running
         self._clear_resistance_icon()
         self._draw_resistance_icon()
-        self._refresh()
+        if refresh:
+            self._refresh()
 
-    def update_boiler_temperature(self, temperature):
+    def update_boiler_temperature(self, temperature, refresh=True):
         if temperature == self.boiler_temperature:
             return
         self.boiler_temperature = temperature
         self._clear_boiler_temperature()
         self._draw_boiler_temperature()
-        self._refresh()
+        if refresh:
+            self._refresh()
 
-    def update_boiler_running(self, running):
+    def update_boiler_running(self, running, refresh=True):
         new_running = bool(running)
         if new_running == self.boiler_running:
             return
         self.boiler_running = new_running
         self._clear_flame_icon()
         self._draw_flame_icon()
-        self._refresh()
+        if refresh:
+            self._refresh()
 
     def update_values(
         self,
@@ -244,6 +249,7 @@ class WindowHeating(WindowBase):
         tank_resistance_running=None,
         boiler_temperature=None,
         boiler_running=None,
+        refresh=True,
     ):
         changed = False
 
@@ -281,5 +287,5 @@ class WindowHeating(WindowBase):
                 self._draw_flame_icon()
                 changed = True
 
-        if changed:
+        if changed and refresh:
             self._refresh()

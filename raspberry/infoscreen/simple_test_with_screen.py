@@ -306,12 +306,42 @@ def _parse_spot_day_key(day_key):
     return (int(parts[0]), int(parts[1]), int(parts[2]))
 
 
+def _parse_spot_timestamp_key(timestamp_key):
+    date_and_time = timestamp_key.split('T')
+    if len(date_and_time) != 2:
+        raise ValueError('Invalid timestamp key: %s' % timestamp_key)
+
+    year, month, day = _parse_spot_day_key(date_and_time[0])
+
+    time_parts = date_and_time[1].split(':')
+    if len(time_parts) < 2:
+        raise ValueError('Invalid timestamp key: %s' % timestamp_key)
+
+    hour = int(time_parts[0])
+    minute = int(time_parts[1])
+    quarter = minute // 15
+    if quarter > 3:
+        quarter = 3
+
+    return (year, month, day, hour, quarter)
+
+
 def _build_spot_price_points(spot_prices_long):
     if not isinstance(spot_prices_long, dict):
         return []
 
     points = []
     for day_key, hours in spot_prices_long.items():
+        # Support flat format, e.g. {'2026-3-30T18:1:25': 2.7}
+        if isinstance(hours, (int, float)):
+            try:
+                year, month, day, hour, quarter = _parse_spot_timestamp_key(day_key)
+            except ValueError:
+                continue
+
+            points.append((year, month, day, hour, quarter, hours))
+            continue
+
         try:
             year, month, day = _parse_spot_day_key(day_key)
         except ValueError:
@@ -338,7 +368,7 @@ def _build_spot_price_points(spot_prices_long):
     points.sort()
     return points
 
-
+# ('spot_prices_long', {'2026-4-5': {'22': [0, 0, 0, 0], '23': [0, 0, 0, 0], '18': [0, 0, 0, 0], '19': [0, 1, 1, 0], '21': [0, 1, 0, 0], '20': [1, 1, 1, 1]}})
 def _resolve_spot_prices(spot_prices_long):
     points = _build_spot_price_points(spot_prices_long)
     if not points:
@@ -364,53 +394,55 @@ def _resolve_spot_prices(spot_prices_long):
 
     return (current_price, future_points)
 
+def init_windows_from_mqtt(client, win_temp=None, win_heating=None, win_spot_prices=None):
+    current_values = client.get_current_values()
+    outdoor = current_values['outdoor']
+    warehouse = current_values['warehouse']
+    garage = current_values['garage']
+    heating_tank_down = current_values['heating_tank_down']
+    heating_tank_up = current_values['heating_tank_up']
+    heating_tank_resistance_running = current_values['heating_tank_resistance_running']
+    heating_boiler_temperature = current_values['heating_boiler_temperature']
+    heating_boiler_running = current_values['heating_boiler_running']
+    spot_prices_long = current_values['spot_prices_long']
+    current_spot_price, future_spot_prices = _resolve_spot_prices(spot_prices_long)
+
+    config.debug_print(
+        'Initial values: outdoor=%s, warehouse=%s, garage=%s, tank_down=%s, tank_up=%s, tank_resistance_running=%s, boiler_temperature=%s, boiler_running=%s, current_spot_price=%s'
+        % (
+            outdoor,
+            warehouse,
+            garage,
+            heating_tank_down,
+            heating_tank_up,
+            heating_tank_resistance_running,
+            heating_boiler_temperature,
+            heating_boiler_running,
+            current_spot_price,
+        )
+    )
+    if win_temp is not None:
+        if outdoor is not None:
+            win_temp.update_outdoor_temperature(outdoor, refresh=False)
+        if warehouse is not None:
+            win_temp.update_outbuilding_temperature(warehouse, refresh=False)
+        if garage is not None:
+            win_temp.update_garage_temperature(garage, refresh=False)
+    if win_heating is not None:
+        win_heating.update_values(
+            tank_down_temperature=heating_tank_down,
+            tank_up_temperature=heating_tank_up,
+            tank_resistance_running=heating_tank_resistance_running,
+            boiler_temperature=heating_boiler_temperature,
+            boiler_running=heating_boiler_running,
+            refresh=False,
+        )
+    if win_spot_prices is not None:
+        win_spot_prices.update_prices(current_spot_price, future_spot_prices, refresh=False)
+
+
 def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices=None):
     try:
-        # Fetch all initial values
-        current_values = client.get_current_values()
-        outdoor = current_values['outdoor']
-        warehouse = current_values['warehouse']
-        garage = current_values['garage']
-        heating_tank_down = current_values['heating_tank_down']
-        heating_tank_up = current_values['heating_tank_up']
-        heating_tank_resistance_running = current_values['heating_tank_resistance_running']
-        heating_boiler_temperature = current_values['heating_boiler_temperature']
-        heating_boiler_running = current_values['heating_boiler_running']
-        spot_prices_long = current_values['spot_prices_long']
-        current_spot_price, future_spot_prices = _resolve_spot_prices(spot_prices_long)
-        
-        config.debug_print(
-            'Initial values: outdoor=%s, warehouse=%s, garage=%s, tank_down=%s, tank_up=%s, tank_resistance_running=%s, boiler_temperature=%s, boiler_running=%s, current_spot_price=%s'
-            % (
-                outdoor,
-                warehouse,
-                garage,
-                heating_tank_down,
-                heating_tank_up,
-                heating_tank_resistance_running,
-                heating_boiler_temperature,
-                heating_boiler_running,
-                current_spot_price,
-            )
-        )
-        if win_temp is not None:
-            if outdoor is not None:
-                win_temp.update_outdoor_temperature(outdoor)
-            if warehouse is not None:
-                win_temp.update_outbuilding_temperature(warehouse)
-            if garage is not None:
-                win_temp.update_garage_temperature(garage)
-        if win_heating is not None:
-            win_heating.update_values(
-                tank_down_temperature=heating_tank_down,
-                tank_up_temperature=heating_tank_up,
-                tank_resistance_running=heating_tank_resistance_running,
-                boiler_temperature=heating_boiler_temperature,
-                boiler_running=heating_boiler_running,
-            )
-        if win_spot_prices is not None:
-            win_spot_prices.update_prices(current_spot_price, future_spot_prices)
-        
         # Listen for further changed values
         for _ in range(5):
             client.check_msg()
@@ -468,6 +500,40 @@ def epd_draw_corners(epd):
         epd.imageblack.text(str(i), 177, 106, 0x00)
         epd.display_Partial(epd.buffer_black, 0, 0, 800, 480)
 
+
+def testing_windows(client, win_temp=None, win_heating=None, win_spot_prices=None):
+    config.debug_print('testing_windows')
+    if win_temp is not None:
+        win_temp.update_outdoor_temperature("eka")
+        time.sleep(10)
+
+        win_temp.update_outbuilding_temperature("toka")
+        time.sleep(10)
+
+        win_temp.update_outdoor_temperature("eka2")
+        time.sleep(10)
+
+        win_temp.update_garage_temperature("kolmas")
+        time.sleep(10)
+
+    if win_heating is not None:
+        time.sleep(10)
+        win_heating.update_tank_down_temperature("neljas")
+        time.sleep(10)
+        win_heating.update_tank_up_temperature("viides")
+        time.sleep(10)
+        win_heating.update_tank_resistance_running("kuudes")
+        time.sleep(10)
+        win_heating.update_boiler_temperature("seitsemäs")
+        time.sleep(10)
+        win_heating.update_boiler_running("kahdeksas")
+        time.sleep(10)
+    if win_spot_prices is not None:
+        time.sleep(10)
+        current_spot_price, future_spot_prices = _resolve_spot_prices("yhdeksäs")
+        win_spot_prices.update_prices(-2.34, future_spot_prices)
+
+
 if __name__=='__main__':
     try:
         wlan = wlan_connect()
@@ -482,6 +548,8 @@ if __name__=='__main__':
         win_heating = WindowHeating(epd)
         win_spot_prices = WindowSpotPrices(epd)
 
+        init_windows_from_mqtt(mqtt, win_temp, win_heating, win_spot_prices)
+
         epd.blit(win_temp.imageblack, win_temp.imagered, win_temp.Xstart, win_temp.Ystart)
         epd.blit(win_heating.imageblack, win_heating.imagered, win_heating.Xstart, win_heating.Ystart)
         epd.blit(win_spot_prices.imageblack, win_spot_prices.imagered, win_spot_prices.Xstart, win_spot_prices.Ystart)
@@ -490,24 +558,20 @@ if __name__=='__main__':
         # epd.imagered.text("Sisälämpötila 22.3", 5, 40, 0xff)
         epd.display()
         # epd.delay_ms(5000)
+        epd.init_part()
 
-        # win_temp.update_outdoor_temperature(15.5)
-        # epd.delay_ms(3000)
-        # win_temp.update_garage_temperature(10.2)
-        # epd.delay_ms(3000)
-
-        # time.sleep(10)
-        # epd.Clear()
-        # epd.imageblack.fill(0xff)
-        # epd.imagered.fill(0x00)
-
-        # epd.imageblack.text("Ulkolämpötila 15.5", 5, 10, 0x00)
-        # epd.imagered.text("Sisälämpötila 11.3", 5, 40, 0xff)
-        # epd.display()
-        # epd.delay_ms(5000)
-        # time.sleep(10)
+        # testing windows
+        testing_windows(mqtt, win_temp, win_heating, win_spot_prices)
 
         listen_for_messages(mqtt, win_temp, win_heating, win_spot_prices)
+        epd.init_Fast()
+        epd.display()
+        # listen_for_mess
+        time.sleep(10)
+        epd.init_Fast()
+        epd.display()
+        time.sleep(10)
+        
 
     except OSError as e:
         epd_close(epd)

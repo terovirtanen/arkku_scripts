@@ -37,6 +37,7 @@ class WindowBase:
         self.init()
 
     def init(self):
+        print("WindowBase init")
         # Prepare window: white background on both layers
         self.imageblack.fill(0xff)
         self.imagered.fill(0x00)
@@ -52,3 +53,26 @@ class WindowBase:
 
         self.epd.init_part()
         self.epd.display_Partial(self.buffer_black, self.Xstart, self.Ystart, self.Xend, self.Yend)
+
+    def displayPartialBlackSubArea(self, subarea_x_start, subarea_y_start, subarea_x_end, subarea_y_end):
+        print("WindowBase display partial black subarea: subarea_x_start=%d, subarea_y_start=%d, subarea_x_end=%d, subarea_y_end=%d" % (subarea_x_start, subarea_y_start, subarea_x_end, subarea_y_end))
+
+        absolute_x_start = self.Xstart + subarea_x_start
+        absolute_y_start = self.Ystart + subarea_y_start
+        absolute_x_end = self.Xstart + subarea_x_end
+        absolute_y_end = self.Ystart + subarea_y_end
+
+        subarea_width = subarea_x_end - subarea_x_start
+        subarea_height = subarea_y_end - subarea_y_start
+
+        if (subarea_width % 8 != 0):
+            raise ValueError("subarea width must be multiple of 8 for byte alignment!")
+
+        subarea_bufferblack = bytearray(subarea_height * subarea_width // 8)
+        subarea_imageblack = framebuf.FrameBuffer(subarea_bufferblack, subarea_width, subarea_height, framebuf.MONO_HLSB)
+        # Copy only the updated rectangle from window black buffer.
+        subarea_imageblack.fill(0xff)
+        subarea_imageblack.blit(self.imageblack, -subarea_x_start, -subarea_y_start)
+
+        self.epd.init_part()
+        self.epd.display_Partial(subarea_bufferblack, absolute_x_start, absolute_y_start, absolute_x_end, absolute_y_end)
