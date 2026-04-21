@@ -69,13 +69,30 @@ def create_database_connection(config):
         raise
 
 
-def should_charge_now(cursor, current_time, is_starting_charge):
+def get_target_current_for_period(config, period_type):
+    """Return charging current for the selected period type."""
+    if period_type == 'solar_max':
+        return 16
+    if period_type == 'solar':
+        return 10
+    if period_type == 'day':
+        return config['day_current']
+    if period_type == 'night':
+        return config['night_current']
+    return None
+
+
+def should_charge_now(cursor, current_time, is_starting_charge, config):
     """Check if charging should be active during current time or next 30 minutes.
     
     Args:
         cursor: Database cursor
         current_time: Current datetime
         is_starting_charge: True if starting new charge (check +30min), False if continuing (check now only)
+        config: Application configuration
+
+    Returns:
+        tuple[bool, str | None, int | None]: (should_charge, selected_period_type, target_current)
     """
     # Check time window: now only OR now + 30 minutes (depending on action)
     if is_starting_charge:
@@ -109,10 +126,26 @@ def should_charge_now(cursor, current_time, is_starting_charge):
         print(f"Found {len(results)} charging periods overlapping with {window_desc}:")
         for start_time, end_time, period_type, avg_price in results:
             print(f"  {period_type}: {start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')} (avg: {avg_price:.2f} c/kWh)")
-        return True
+
+        priority_order = ['solar_max', 'solar', 'day', 'night']
+        selected_period = None
+        for period_type in priority_order:
+            for start_time, end_time, result_period_type, avg_price in results:
+                if result_period_type == period_type:
+                    selected_period = result_period_type
+                    break
+            if selected_period is not None:
+                break
+
+        target_current = None
+        if selected_period is not None:
+            target_current = get_target_current_for_period(config, selected_period)
+            print(f"Selected charging period type: {selected_period} (target current: {target_current}A)")
+
+        return True, selected_period, target_current
     else:
         print(f"No charging periods found for {window_desc}")
-        return False
+        return False, None, None
 
 
 def get_shelly_status(config):
@@ -279,9 +312,9 @@ def main():
             hour = current_time.hour
             is_day_time = config['day_start_hour'] <= hour < config['day_end_hour']
             is_night = hour < 8
-            target_current = config['day_current'] if is_day_time else config['night_current']
+            default_current = config['day_current'] if is_day_time else config['night_current']
             
-            print(f"Current time: {current_time.strftime('%H:%M')} (target current: {target_current}A)")
+            print(f"Current time: {current_time.strftime('%H:%M')} (default current: {default_current}A)")
             
             # Decision logic based on charger status
             # charger_free -> car not connected
@@ -293,7 +326,7 @@ def main():
             if current_status == 'charger_charging':
                 print("🔍 Charger is currently charging - checking if should continue")
                 # Check if charging should continue (current time only, no +30min)
-                should_continue = should_charge_now(cursor, current_time, False)
+                should_continue, selected_period_type, target_current = should_charge_now(cursor, current_time, False, config)
                 print(f"Charging should continue: {'YES' if should_continue else 'NO'}")
                 
                 # Night charging may be scheduled to the device, do not mess it up
@@ -302,6 +335,9 @@ def main():
                     set_shelly_charging_state(config, False, 0)
                     print("✅ Charging stopped")
                 else:
+                    if target_current is None:
+                        target_current = default_current
+
                     # Check if current needs adjustment
                     if charging_current != target_current:
                         print(f"🔧 Adjusting charging current from {charging_current}A to {target_current}A")
@@ -313,10 +349,12 @@ def main():
             elif current_status == 'charger_end':
                 print("🔍 Charging session ended - checking if should restart")
                 # Check if charging should start (current time + 30min window)
-                should_start = should_charge_now(cursor, current_time, True)
+                should_start, selected_period_type, target_current = should_charge_now(cursor, current_time, True, config)
                 print(f"Charging should start in next 30min: {'YES' if should_start else 'NO'}")
                 
                 if should_start:
+                    if target_current is None:
+                        target_current = default_current
                     print(f"🚀 Starting new charging session ({target_current}A)")
                     set_shelly_charging_state(config, True, target_current)
                     print("✅ Charging started")
