@@ -33,7 +33,11 @@ def load_config():
         # fixed price periods
         'fixed_price_date_start': '2026-1-1',  # '2024-12-24'
         'fixed_price_date_end': '2026-3-20',   # '2024-12-24'
-        'fixed_price': 9.58                    # fixed price during period (c/kWh)
+        'fixed_price': 9.58,                   # fixed price during period (c/kWh)
+
+        # Solar forecast charging threshold
+        'solar_power_threshold_wh': 2000,
+        'solar_max_power_threshold_wh': 4000
     }
     
     if not config['db_username'] or not config['db_password']:
@@ -68,17 +72,76 @@ def create_charger_table(cursor):
             start_time DATETIME NOT NULL,
             end_time DATETIME NOT NULL,
             average_price DECIMAL(10, 4) NOT NULL,
-            period_type ENUM('night', 'day') NOT NULL,
+            period_type ENUM('night', 'day', 'solar', 'solar_max') NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_start_time (start_time),
             INDEX idx_period_type (period_type)
         )
         """
         cursor.execute(create_table_query)
+
+        # Ensure existing table enum supports solar periods.
+        alter_table_query = """
+        ALTER TABLE car_charger
+        MODIFY COLUMN period_type ENUM('night', 'day', 'solar', 'solar_max') NOT NULL
+        """
+        cursor.execute(alter_table_query)
         print("Table 'car_charger' created or already exists")
     except Error as e:
         print(f"Error creating car_charger table: {e}")
         raise
+
+
+def get_solar_forecast_periods(cursor, start_time, end_time, threshold_wh):
+    """Get hourly solar forecast rows above threshold from solarpower_forecast database."""
+    query = """
+    SELECT date, forecastpower
+    FROM solarpower_forecast.forecast_fmi_daily
+    WHERE date >= %s
+      AND date < %s
+      AND forecastpower > %s
+    ORDER BY date
+    """
+
+    cursor.execute(query, (start_time, end_time, threshold_wh))
+    results = cursor.fetchall()
+    print(f"Found {len(results)} solar forecast hours above {threshold_wh} Wh")
+    return results
+
+
+def save_solar_period_to_db(cursor, start_time, end_time, period_type):
+    """Save one solar charging hour to car_charger with type solar or solar_max."""
+    try:
+        delete_query = """
+        DELETE FROM car_charger
+        WHERE start_time = %s
+          AND end_time = %s
+          AND period_type IN ('solar', 'solar_max')
+        """
+        cursor.execute(delete_query, (start_time, end_time))
+
+        insert_query = """
+        INSERT INTO car_charger (start_time, end_time, average_price, period_type)
+                SELECT %s, %s, 0, %s
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM car_charger
+            WHERE start_time = %s
+              AND end_time = %s
+              AND period_type = %s
+        )
+        """
+        cursor.execute(insert_query, (start_time, end_time, period_type, start_time, end_time, period_type))
+
+        if cursor.rowcount > 0:
+            print(f"✓ Saved {period_type} period: {start_time.strftime('%Y-%m-%d %H:%M')}-{end_time.strftime('%H:%M')}")
+            return True
+
+        print(f"- {period_type} period already exists: {start_time.strftime('%Y-%m-%d %H:%M')}-{end_time.strftime('%H:%M')}")
+        return False
+    except Error as e:
+        print(f"Error saving solar period to database: {e}")
+        return False
 
 
 def save_period_to_db(cursor, start_time, end_time, avg_price, period_type):
@@ -406,14 +469,33 @@ def main():
             day_periods = find_day_cheap_periods(price_data, best_avg_price, config, timezone)
             
             print(f"\n☀️ CHEAP DAY PERIODS FOUND ({len(day_periods)}):")
-            for i, (start_time, end_time, avg_price, period_data) in enumerate(day_periods, 1):
-                duration_hours = (end_time - start_time).total_seconds() / 3600
-                print(f"   Period {i}: {start_time.strftime('%H:%M')}-{end_time.strftime('%H:%M')} ({duration_hours:.1f}h)")
+            for i, (day_start_time, day_end_time, avg_price, period_data) in enumerate(day_periods, 1):
+                duration_hours = (day_end_time - day_start_time).total_seconds() / 3600
+                print(f"   Period {i}: {day_start_time.strftime('%H:%M')}-{day_end_time.strftime('%H:%M')} ({duration_hours:.1f}h)")
                 print(f"     Average price: {avg_price:.2f} c/kWh")
                 print(f"     Data points: {len(period_data)}")
                 
                 # Save day period to database
-                save_period_to_db(cursor, start_time, end_time, avg_price, 'day')
+                save_period_to_db(cursor, day_start_time, day_end_time, avg_price, 'day')
+
+            # Save solar periods from forecast table
+            solar_threshold_wh = config['solar_power_threshold_wh']
+            solar_max_threshold_wh = config['solar_max_power_threshold_wh']
+            solar_rows = get_solar_forecast_periods(cursor, start_time, end_time, solar_threshold_wh)
+
+            saved_solar_count = 0
+            saved_solar_max_count = 0
+            for forecast_time, forecast_power in solar_rows:
+                solar_start = forecast_time
+                solar_end = forecast_time + timedelta(hours=1)
+                period_type = 'solar_max' if float(forecast_power) > solar_max_threshold_wh else 'solar'
+                if save_solar_period_to_db(cursor, solar_start, solar_end, period_type):
+                    if period_type == 'solar_max':
+                        saved_solar_max_count += 1
+                    else:
+                        saved_solar_count += 1
+
+            print(f"\n🌞 SOLAR PERIODS HANDLED: {len(solar_rows)} matching hours, {saved_solar_count} solar + {saved_solar_max_count} solar_max inserted")
             
             # Commit all changes
             connection.commit();
@@ -421,6 +503,8 @@ def main():
             print(f"\n✅ Charging schedule optimized successfully!")
             print(f"   Night period: {best_start.strftime('%H:%M')}-{night_end_time.strftime('%H:%M')}")
             print(f"   {len(day_periods)} additional day periods found")
+            print(f"   {saved_solar_count} solar periods inserted")
+            print(f"   {saved_solar_max_count} solar_max periods inserted")
             print(f"   All periods saved to database")
             return 0
                 
