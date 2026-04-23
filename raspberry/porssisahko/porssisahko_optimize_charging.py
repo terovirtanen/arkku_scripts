@@ -486,8 +486,12 @@ def main():
             saved_solar_count = 0
             saved_solar_max_count = 0
             for forecast_time, forecast_power in solar_rows:
-                solar_start = forecast_time
-                solar_end = forecast_time + timedelta(hours=1)
+                if now.hour < 13:
+                    solar_start = forecast_time
+                    solar_end = forecast_time + timedelta(hours=1)
+                else:
+                    solar_end = forecast_time
+                    solar_start = forecast_time - timedelta(hours=1)
                 period_type = 'solar_max' if float(forecast_power) > solar_max_threshold_wh else 'solar'
                 if save_solar_period_to_db(cursor, solar_start, solar_end, period_type):
                     if period_type == 'solar_max':
