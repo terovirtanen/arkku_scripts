@@ -26,7 +26,7 @@ class WindowTemperature(WindowBase):
     topMargin = 10
     lineSpacing = 30
     columnSpacing = 150
-    valueWidth = 140
+    valueWidth = 90
     valueHeight = 24
 
     title = "Lämpötilat"
@@ -125,6 +125,8 @@ class WindowTemperature(WindowBase):
     def _update_temperature(self, index, temperature, refresh=True):
         self.temperature_values[index] = temperature
         self._clearValueRow(index)
+        if refresh:
+            self._displayValuePartialBlack(index)
         self._writeValue(index)
         if refresh:
             self._displayValuePartialBlack(index)
@@ -139,6 +141,9 @@ class WindowTemperature(WindowBase):
         self._writeValues()
 
     def update_outdoor_temperature(self, temperature, refresh=True):
+        # by some reason this needs to clear twice
+        if refresh:
+            self._displayValuePartialBlack(0)
         self._update_temperature(0, temperature, refresh=refresh)
 
     def update_outbuilding_temperature(self, temperature, refresh=True):
