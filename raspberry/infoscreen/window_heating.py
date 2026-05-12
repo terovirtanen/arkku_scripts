@@ -20,7 +20,7 @@ class WindowHeating(WindowBase):
 
     tank_left = 40
     tank_top = 70
-    tank_width = 110
+    tank_width = 90
     tank_height = 125
 
     boiler_left = 255
@@ -50,8 +50,8 @@ class WindowHeating(WindowBase):
 
     def _format_temperature(self, value):
         if value is None:
-            return "--.-C"
-        return "%sC" % value
+            return "--.-°C"
+        return "%s°C" % value
 
     def _centered_text_x(self, text, area_left, area_width, font_module):
         text_width = len(text) * font_module.max_width()
@@ -101,14 +101,14 @@ class WindowHeating(WindowBase):
             return
 
         center_x = self.tank_left + self.tank_width // 2
-        start_y = self.tank_top + 38
-        self.imageblack.vline(center_x, start_y - 12, 10, 0x00)
-        self.imageblack.line(center_x, start_y, center_x - 14, start_y + 10, 0x00)
-        self.imageblack.line(center_x - 14, start_y + 10, center_x + 14, start_y + 22, 0x00)
-        self.imageblack.line(center_x + 14, start_y + 22, center_x - 14, start_y + 34, 0x00)
-        self.imageblack.line(center_x - 14, start_y + 34, center_x + 14, start_y + 46, 0x00)
-        self.imageblack.line(center_x + 14, start_y + 46, center_x, start_y + 56, 0x00)
-        self.imageblack.vline(center_x, start_y + 56, 10, 0x00)
+        start_y = self.tank_top + 45
+        self.imageblack.vline(center_x, start_y - 7, 7, 0x00)
+        self.imageblack.line(center_x, start_y, center_x - 9, start_y + 7, 0x00)
+        self.imageblack.line(center_x - 9, start_y + 7, center_x + 9, start_y + 14, 0x00)
+        self.imageblack.line(center_x + 9, start_y + 14, center_x - 9, start_y + 21, 0x00)
+        self.imageblack.line(center_x - 9, start_y + 21, center_x + 9, start_y + 28, 0x00)
+        self.imageblack.line(center_x + 9, start_y + 28, center_x, start_y + 35, 0x00)
+        self.imageblack.vline(center_x, start_y + 35, 7, 0x00)
 
     def _draw_flame_icon(self):
         if not self.boiler_running:
@@ -116,19 +116,27 @@ class WindowHeating(WindowBase):
 
         center_x = self.boiler_left + self.boiler_width // 2
         base_y = self.boiler_top + self.boiler_height - 16
-        self.imageblack.line(center_x, base_y - 24, center_x - 16, base_y, 0x00)
-        self.imageblack.line(center_x - 16, base_y, center_x, base_y + 10, 0x00)
-        self.imageblack.line(center_x, base_y + 10, center_x + 16, base_y, 0x00)
-        self.imageblack.line(center_x + 16, base_y, center_x, base_y - 24, 0x00)
-        self.imageblack.line(center_x, base_y - 13, center_x - 7, base_y + 2, 0x00)
-        self.imageblack.line(center_x - 7, base_y + 2, center_x + 2, base_y - 4, 0x00)
-        self.imageblack.line(center_x + 2, base_y - 4, center_x, base_y - 13, 0x00)
+
+        # Ulompi liekki (isompi, kaareva muoto)
+        self.imageblack.line(center_x, base_y - 26, center_x - 14, base_y, 0x00)
+        self.imageblack.line(center_x - 14, base_y, center_x, base_y + 12, 0x00)
+        self.imageblack.line(center_x, base_y + 12, center_x + 14, base_y, 0x00)
+        self.imageblack.line(center_x + 14, base_y, center_x, base_y - 26, 0x00)
+
+        # Sisempi liekki (pienempi, "täyttö")
+        self.imageblack.line(center_x, base_y - 14, center_x - 6, base_y + 2, 0x00)
+        self.imageblack.line(center_x - 6, base_y + 2, center_x, base_y + 6, 0x00)
+        self.imageblack.line(center_x, base_y + 6, center_x + 6, base_y + 2, 0x00)
+        self.imageblack.line(center_x + 6, base_y + 2, center_x, base_y - 14, 0x00)
+
+        # "Täytetään" liekin keskusta (pienempi musta täplä)
+        self.imageblack.fill_rect(center_x - 2, base_y, 5, 7, 0x00)
 
     def _clear_tank_top_temperature(self):
-        self.imageblack.fill_rect(self.tank_left + 4, self.tank_top_text_y - 1, self.tank_width - 8, 14, 0xff)
+        self.imageblack.fill_rect(self.tank_left + 15, self.tank_top_text_y - 1, self.tank_width - 16, 14, 0xff)
 
     def _clear_tank_bottom_temperature(self):
-        self.imageblack.fill_rect(self.tank_left + 4, self.tank_bottom_text_y - 1, self.tank_width - 8, 14, 0xff)
+        self.imageblack.fill_rect(self.tank_left + 15, self.tank_bottom_text_y - 1, self.tank_width - 16, 14, 0xff)
 
     def _clear_boiler_temperature(self):
         self.imageblack.fill_rect(self.boiler_left + 3, self.boiler_text_y - 1, self.boiler_width - 6, 14, 0xff)
@@ -136,7 +144,7 @@ class WindowHeating(WindowBase):
     def _clear_resistance_icon(self):
         center_x = self.tank_left + self.tank_width // 2
         start_y = self.tank_top + 38
-        self.imageblack.fill_rect(center_x - 16, start_y - 14, 33, 78, 0xff)
+        self.imageblack.fill_rect(center_x - 16, start_y - 14, 33, 68, 0xff)
 
     def _clear_flame_icon(self):
         center_x = self.boiler_left + self.boiler_width // 2
@@ -145,7 +153,7 @@ class WindowHeating(WindowBase):
 
     def _draw_tank_top_temperature(self):
         text = self._format_temperature(self.tank_up_temperature)
-        text_left = self.tank_left + 8
+        text_left = self.tank_left + 15
         text_width = self.tank_width - 16
         self._draw_text(
             text,
@@ -155,7 +163,7 @@ class WindowHeating(WindowBase):
 
     def _draw_tank_bottom_temperature(self):
         text = self._format_temperature(self.tank_down_temperature)
-        text_left = self.tank_left + 8
+        text_left = self.tank_left + 15
         text_width = self.tank_width - 16
         self._draw_text(
             text,
