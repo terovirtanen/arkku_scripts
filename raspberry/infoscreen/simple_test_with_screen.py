@@ -37,9 +37,11 @@ import network
 # own library
 import config
 import EPD_7in5_B
+
 from window_heating import WindowHeating
 from window_spot_prices import WindowSpotPrices
 from window_temperature import WindowTemperature
+from window_carcharger import WindowCarCharger
 
 print(dir(time))
 print(time.ticks_us())
@@ -544,15 +546,20 @@ if __name__=='__main__':
         epd.imageblack.fill(0xff)
         epd.imagered.fill(0x00)
 
+
         win_temp = WindowTemperature(epd)
         win_heating = WindowHeating(epd)
         win_spot_prices = WindowSpotPrices(epd)
+        win_carcharger = WindowCarCharger(epd)
+
 
         init_windows_from_mqtt(mqtt, win_temp, win_heating, win_spot_prices)
+
 
         epd.blit(win_temp.imageblack, win_temp.imagered, win_temp.Xstart, win_temp.Ystart)
         epd.blit(win_heating.imageblack, win_heating.imagered, win_heating.Xstart, win_heating.Ystart)
         epd.blit(win_spot_prices.imageblack, win_spot_prices.imagered, win_spot_prices.Xstart, win_spot_prices.Ystart)
+        epd.blit(win_carcharger.imageblack, win_carcharger.imagered, win_carcharger.Xstart, win_carcharger.Ystart)
 
         # epd.imageblack.text("Ulkolämpötila 15.5", 5, 10, 0x00)
         # epd.imagered.text("Sisälämpötila 22.3", 5, 40, 0xff)

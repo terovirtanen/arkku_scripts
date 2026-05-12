@@ -53,7 +53,7 @@ class WindowTemperature(WindowBase):
     def _writeTitle(self):
         # Header in red at 2x size using framebuf2
         w_red20 = Writer(self.imagered, fifont20)
-        Writer.set_textpos(self.imagered, self.leftMargin, self.topMargin)
+        Writer.set_textpos(self.imagered, self.topMargin, self.leftMargin)
         w_red20.printstring(self.title)
 
     def _writeLabels(self):

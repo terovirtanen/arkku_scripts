@@ -945,6 +945,8 @@ if __name__=='__main__':
     epd = EPD_7in5_B()
     epd.init()
     epd.Clear()
+    epd.delay_ms(5000)
+    print("remove cable")
     epd.display_Base_color(0xFF)  # set base to white
     epd.TurnOnDisplay()
     epd.delay_ms(2000)
