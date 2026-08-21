@@ -124,6 +124,7 @@ class MqttConnection:
         subscribe_topic=None,
         debug=False,
         logger=None,
+        keepalive=60,
     ):
         self.client_id = client_id
         self.server = server
@@ -132,10 +133,12 @@ class MqttConnection:
         self.subscribe_topic = subscribe_topic
         self.debug = debug
         self.logger = logger
-        self.client = MQTTClient(client_id, server, user=user, password=password)
+        self.keepalive = keepalive
+        self.client = MQTTClient(client_id, server, user=user, password=password, keepalive=keepalive)
         self.client.set_callback(self._on_message)
         self.messages = {}
         self.changed_messages = {}
+        self.last_ping_ms = time.ticks_ms()
 
     def _log(self, message):
         if self.debug and self.logger is not None:
@@ -219,8 +222,18 @@ class MqttConnection:
             self._log('Connected to %s MQTT broker' % self.server)
         return self.client
 
+    def _maybe_ping(self):
+        # Without regular pings, broker/NAT may silently drop an idle connection
+        elapsed_ms = time.ticks_diff(time.ticks_ms(), self.last_ping_ms)
+        if elapsed_ms >= (self.keepalive * 1000) // 2:
+            self.client.ping()
+            self.last_ping_ms = time.ticks_ms()
+
     def check_msg(self):
-        self.client.check_msg()
+        self._maybe_ping()
+        # Drain all currently pending messages, check_msg() only reads one packet per call
+        while self.client.check_msg() is not None:
+            pass
 
     def read_changed_messages(self):
         changed_messages = self.changed_messages
@@ -445,37 +458,40 @@ def init_windows_from_mqtt(client, win_temp=None, win_heating=None, win_spot_pri
         win_spot_prices.update_prices(current_spot_price, future_spot_prices, refresh=False)
 
 
-def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices=None, loops = 5, sleeptime_seconds = 10):
-    
+def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices=None, loops = 5, sleeptime_seconds = 10, poll_sleep_ms = 1000):
+
     # try:
-        # Listen for further changed values
+        # Listen for further changed values, polling often instead of one long sleep
+        # per iteration so messages don't queue up and pings keep the connection alive
         for _ in range(loops):
-            client.check_msg()
-            changed_messages = client.read_changed_messages()
-            if changed_messages:
-                config.debug_print('Changed MQTT values: %s' % changed_messages)
-                if win_temp is not None:
-                    if 'outdoor' in changed_messages:
-                        win_temp.update_outdoor_temperature(changed_messages['outdoor'])
-                    if 'warehouse' in changed_messages:
-                        win_temp.update_outbuilding_temperature(changed_messages['warehouse'])
-                    if 'garage' in changed_messages:
-                        win_temp.update_garage_temperature(changed_messages['garage'])
-                if win_heating is not None:
-                    if 'heating_tank_down' in changed_messages:
-                        win_heating.update_tank_down_temperature(changed_messages['heating_tank_down'])
-                    if 'heating_tank_up' in changed_messages:
-                        win_heating.update_tank_up_temperature(changed_messages['heating_tank_up'])
-                    if 'heating_tank_resistance_running' in changed_messages:
-                        win_heating.update_tank_resistance_running(changed_messages['heating_tank_resistance_running'])
-                    if 'heating_boiler_temperature' in changed_messages:
-                        win_heating.update_boiler_temperature(changed_messages['heating_boiler_temperature'])
-                    if 'heating_boiler_running' in changed_messages:
-                        win_heating.update_boiler_running(changed_messages['heating_boiler_running'])
-                if win_spot_prices is not None and 'spot_prices_long' in changed_messages:
-                    current_spot_price, future_spot_prices = _resolve_spot_prices(changed_messages['spot_prices_long'])
-                    win_spot_prices.update_prices(current_spot_price, future_spot_prices)
-            time.sleep(sleeptime_seconds)
+            deadline = time.ticks_add(time.ticks_ms(), sleeptime_seconds * 1000)
+            while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+                client.check_msg()
+                changed_messages = client.read_changed_messages()
+                if changed_messages:
+                    config.debug_print('Changed MQTT values: %s' % changed_messages)
+                    if win_temp is not None:
+                        if 'outdoor' in changed_messages:
+                            win_temp.update_outdoor_temperature(changed_messages['outdoor'])
+                        if 'warehouse' in changed_messages:
+                            win_temp.update_outbuilding_temperature(changed_messages['warehouse'])
+                        if 'garage' in changed_messages:
+                            win_temp.update_garage_temperature(changed_messages['garage'])
+                    if win_heating is not None:
+                        if 'heating_tank_down' in changed_messages:
+                            win_heating.update_tank_down_temperature(changed_messages['heating_tank_down'])
+                        if 'heating_tank_up' in changed_messages:
+                            win_heating.update_tank_up_temperature(changed_messages['heating_tank_up'])
+                        if 'heating_tank_resistance_running' in changed_messages:
+                            win_heating.update_tank_resistance_running(changed_messages['heating_tank_resistance_running'])
+                        if 'heating_boiler_temperature' in changed_messages:
+                            win_heating.update_boiler_temperature(changed_messages['heating_boiler_temperature'])
+                        if 'heating_boiler_running' in changed_messages:
+                            win_heating.update_boiler_running(changed_messages['heating_boiler_running'])
+                    if win_spot_prices is not None and 'spot_prices_long' in changed_messages:
+                        current_spot_price, future_spot_prices = _resolve_spot_prices(changed_messages['spot_prices_long'])
+                        win_spot_prices.update_prices(current_spot_price, future_spot_prices)
+                time.sleep_ms(poll_sleep_ms)
     # finally:
     #     client.disconnect()
 
