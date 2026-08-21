@@ -368,6 +368,7 @@ def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices
         # Listen for further changed values, polling often instead of one long sleep
         # per iteration so messages don't queue up and pings keep the connection alive
         for _ in range(loops):
+            config.debug_print('Time now: %s' % (time.localtime(),))
             deadline = time.ticks_add(time.ticks_ms(), sleeptime_seconds * 1000)
             while time.ticks_diff(deadline, time.ticks_ms()) > 0:
                 client.check_msg()
