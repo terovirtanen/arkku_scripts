@@ -72,6 +72,8 @@ class WlanConnection:
     def connect(self):
         self.wlan.active(True)
 
+        self._log('connect to %s with %s' % (self.ssid, self.password))
+
         if self.wlan.status() != 3:
             self.wlan.connect(self.ssid, self.password)
 
@@ -443,10 +445,11 @@ def init_windows_from_mqtt(client, win_temp=None, win_heating=None, win_spot_pri
         win_spot_prices.update_prices(current_spot_price, future_spot_prices, refresh=False)
 
 
-def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices=None):
-    try:
+def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices=None, loops = 5, sleeptime_seconds = 10):
+    
+    # try:
         # Listen for further changed values
-        for _ in range(5):
+        for _ in range(loops):
             client.check_msg()
             changed_messages = client.read_changed_messages()
             if changed_messages:
@@ -472,9 +475,9 @@ def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices
                 if win_spot_prices is not None and 'spot_prices_long' in changed_messages:
                     current_spot_price, future_spot_prices = _resolve_spot_prices(changed_messages['spot_prices_long'])
                     win_spot_prices.update_prices(current_spot_price, future_spot_prices)
-            time.sleep(10)
-    finally:
-        client.disconnect()
+            time.sleep(sleeptime_seconds)
+    # finally:
+    #     client.disconnect()
 
 def init_epd():
     epd = EPD_7in5_B.EPD_7in5_B()
@@ -568,23 +571,34 @@ if __name__=='__main__':
         epd.init_part()
 
         # testing windows
-        testing_windows(mqtt, win_temp, win_heating, win_spot_prices)
+        # if config.DEBUG:
+        #     testing_windows(mqtt, win_temp, win_heating, win_spot_prices)
+        #     listen_for_messages(mqtt, win_temp, win_heating, win_spot_prices)
+        #     epd.init_Fast()
+        #     epd.display()
+        #     # listen_for_mess
+        #     time.sleep(10)
+        #     epd.init_Fast()
+        #     epd.display()
+        #     time.sleep(10)
+        # else:
 
-        listen_for_messages(mqtt, win_temp, win_heating, win_spot_prices)
-        epd.init_Fast()
-        epd.display()
-        # listen_for_mess
-        time.sleep(10)
-        epd.init_Fast()
-        epd.display()
-        time.sleep(10)
+        # prod vals
+        for _ in range(6):
+            listen_for_messages(mqtt, win_temp, win_heating, win_spot_prices, 20, 30)
+            epd.init_Fast()
+            epd.display()
+            time.sleep(10)
         
 
     except OSError as e:
+        mqtt.disconnect()
         epd_close(epd)
         restart_and_reconnect()
 
-
-
+    # if config.DEBUG:
+    #     epd_close(epd)
+    # else:
+    #     restart_and_reconnect()
+    mqtt.disconnect()
     epd_close(epd)
-    # restart_and_reconnect()
