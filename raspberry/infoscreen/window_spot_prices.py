@@ -1,6 +1,10 @@
+from turtle import update
+
+from raspberry.infoscreen.simple_test_with_screen import _build_spot_price_points
 from writer import Writer
 import font10_fi as fifont10
 import font20_fi as fifont20
+import time
 
 import config
 from window_base import WindowBase
@@ -20,6 +24,7 @@ class WindowSpotPrices(WindowBase):
     max_bars = 20
 
     def __init__(self, epd):
+        self.spot_prices_long = None
         self.current_price = None
         self.price_points = []
         super().__init__(epd, self.XSTART, self.YSTART, self.XEND, self.YEND)
@@ -106,20 +111,118 @@ class WindowSpotPrices(WindowBase):
         if refresh:
             self.displayPartialBlack()
 
+    def _parse_spot_day_key(self, day_key):
+        parts = day_key.split('-')
+        if len(parts) != 3:
+            raise ValueError('Invalid day key: %s' % day_key)
+        return (int(parts[0]), int(parts[1]), int(parts[2]))
+
+    def _parse_spot_timestamp_key(self, timestamp_key):
+        date_and_time = timestamp_key.split('T')
+        if len(date_and_time) != 2:
+            raise ValueError('Invalid timestamp key: %s' % timestamp_key)
+
+        year, month, day = self._parse_spot_day_key(date_and_time[0])
+
+        time_parts = date_and_time[1].split(':')
+        if len(time_parts) < 2:
+            raise ValueError('Invalid timestamp key: %s' % timestamp_key)
+
+        hour = int(time_parts[0])
+        minute = int(time_parts[1])
+        quarter = minute // 15
+        if quarter > 3:
+            quarter = 3
+
+        return (year, month, day, hour, quarter)
+
+    def _build_spot_price_points(self):
+        if not isinstance(self.spot_prices_long, dict):
+            return []
+
+        points = []
+        for day_key, hours in self.spot_prices_long.items():
+            # Support flat format, e.g. {'2026-3-30T18:1:25': 2.7}
+            if isinstance(hours, (int, float)):
+                try:
+                    year, month, day, hour, quarter = self._parse_spot_timestamp_key(day_key)
+                except ValueError:
+                    continue
+
+                points.append((year, month, day, hour, quarter, hours))
+                continue
+
+            try:
+                year, month, day = self._parse_spot_day_key(day_key)
+            except ValueError:
+                continue
+
+            if not isinstance(hours, dict):
+                continue
+
+            for hour_key, quarters in hours.items():
+                try:
+                    hour = int(hour_key)
+                except ValueError:
+                    continue
+
+                if not isinstance(quarters, list):
+                    continue
+
+                for quarter, value in enumerate(quarters):
+                    if quarter > 3:
+                        break
+                    if isinstance(value, (int, float)):
+                        points.append((year, month, day, hour, quarter, value))
+
+        points.sort()
+        return points
+
+# ('spot_prices_long', {'2026-4-5': {'22': [0, 0, 0, 0], '23': [0, 0, 0, 0], '18': [0, 0, 0, 0], '19': [0, 1, 1, 0], '21': [0, 1, 0, 0], '20': [1, 1, 1, 1]}})
+    def _resolve_spot_prices(self):
+        points = self._build_spot_price_points()
+        if not points:
+            return (None, [])
+
+        now = time.localtime()
+        current_marker = (now[0], now[1], now[2], now[3], now[4] // 15)
+
+        current_price = None
+        future_points = []
+        for year, month, day, hour, quarter, value in points:
+            marker = (year, month, day, hour, quarter)
+            if marker == current_marker and current_price is None:
+                current_price = value
+            if marker >= current_marker:
+                future_points.append((hour, quarter, value))
+
+        if current_price is None:
+            if future_points:
+                current_price = future_points[0][2]
+            else:
+                current_price = points[-1][5]
+
+        returnValue = True
+        if (self.current_price == current_price and self.price_points == future_points):
+            returnValue = False
+
+        self.current_price = current_price
+        self.price_points = future_points
+
+        return returnValue
+
+
     def init(self):
         self.imageblack.fill(0xff)
         self.imagered.fill(0x00)
         self._write_title()
         self._redraw_black()
 
-    def update_prices(self, current_price, price_points, refresh=True):
-        if price_points is None:
-            price_points = []
+    def update_prices(self, spot_prices_long = None, refresh=True):
+        if spot_prices_long is not None:
+            self.spot_prices_long = spot_prices_long
 
-        if refresh and current_price == self.current_price and price_points == self.price_points:
-            return
+        update = self._resolve_spot_prices()
 
-        self.current_price = current_price
-        self.price_points = price_points
-        
-        self._refresh(refresh)
+        if refresh or update:
+            self._refresh(refresh)

@@ -316,101 +316,6 @@ def mqtt_connect_and_subscribe():
     return mqtt_connection
 
 
-def _parse_spot_day_key(day_key):
-    parts = day_key.split('-')
-    if len(parts) != 3:
-        raise ValueError('Invalid day key: %s' % day_key)
-    return (int(parts[0]), int(parts[1]), int(parts[2]))
-
-
-def _parse_spot_timestamp_key(timestamp_key):
-    date_and_time = timestamp_key.split('T')
-    if len(date_and_time) != 2:
-        raise ValueError('Invalid timestamp key: %s' % timestamp_key)
-
-    year, month, day = _parse_spot_day_key(date_and_time[0])
-
-    time_parts = date_and_time[1].split(':')
-    if len(time_parts) < 2:
-        raise ValueError('Invalid timestamp key: %s' % timestamp_key)
-
-    hour = int(time_parts[0])
-    minute = int(time_parts[1])
-    quarter = minute // 15
-    if quarter > 3:
-        quarter = 3
-
-    return (year, month, day, hour, quarter)
-
-
-def _build_spot_price_points(spot_prices_long):
-    if not isinstance(spot_prices_long, dict):
-        return []
-
-    points = []
-    for day_key, hours in spot_prices_long.items():
-        # Support flat format, e.g. {'2026-3-30T18:1:25': 2.7}
-        if isinstance(hours, (int, float)):
-            try:
-                year, month, day, hour, quarter = _parse_spot_timestamp_key(day_key)
-            except ValueError:
-                continue
-
-            points.append((year, month, day, hour, quarter, hours))
-            continue
-
-        try:
-            year, month, day = _parse_spot_day_key(day_key)
-        except ValueError:
-            continue
-
-        if not isinstance(hours, dict):
-            continue
-
-        for hour_key, quarters in hours.items():
-            try:
-                hour = int(hour_key)
-            except ValueError:
-                continue
-
-            if not isinstance(quarters, list):
-                continue
-
-            for quarter, value in enumerate(quarters):
-                if quarter > 3:
-                    break
-                if isinstance(value, (int, float)):
-                    points.append((year, month, day, hour, quarter, value))
-
-    points.sort()
-    return points
-
-# ('spot_prices_long', {'2026-4-5': {'22': [0, 0, 0, 0], '23': [0, 0, 0, 0], '18': [0, 0, 0, 0], '19': [0, 1, 1, 0], '21': [0, 1, 0, 0], '20': [1, 1, 1, 1]}})
-def _resolve_spot_prices(spot_prices_long):
-    points = _build_spot_price_points(spot_prices_long)
-    if not points:
-        return (None, [])
-
-    now = time.localtime()
-    current_marker = (now[0], now[1], now[2], now[3], now[4] // 15)
-
-    current_price = None
-    future_points = []
-    for year, month, day, hour, quarter, value in points:
-        marker = (year, month, day, hour, quarter)
-        if marker == current_marker and current_price is None:
-            current_price = value
-        if marker >= current_marker:
-            future_points.append((hour, quarter, value))
-
-    if current_price is None:
-        if future_points:
-            current_price = future_points[0][2]
-        else:
-            current_price = points[-1][5]
-
-    return (current_price, future_points)
-
 def init_windows_from_mqtt(client, win_temp=None, win_heating=None, win_spot_prices=None):
     current_values = client.get_current_values()
     outdoor = current_values['outdoor']
@@ -422,10 +327,9 @@ def init_windows_from_mqtt(client, win_temp=None, win_heating=None, win_spot_pri
     heating_boiler_temperature = current_values['heating_boiler_temperature']
     heating_boiler_running = current_values['heating_boiler_running']
     spot_prices_long = current_values['spot_prices_long']
-    current_spot_price, future_spot_prices = _resolve_spot_prices(spot_prices_long)
 
     config.debug_print(
-        'Initial values: outdoor=%s, warehouse=%s, garage=%s, tank_down=%s, tank_up=%s, tank_resistance_running=%s, boiler_temperature=%s, boiler_running=%s, current_spot_price=%s'
+        'Initial values: outdoor=%s, warehouse=%s, garage=%s, tank_down=%s, tank_up=%s, tank_resistance_running=%s, boiler_temperature=%s, boiler_running=%s, spot_prices_long=%s'
         % (
             outdoor,
             warehouse,
@@ -435,7 +339,7 @@ def init_windows_from_mqtt(client, win_temp=None, win_heating=None, win_spot_pri
             heating_tank_resistance_running,
             heating_boiler_temperature,
             heating_boiler_running,
-            current_spot_price,
+            spot_prices_long,
         )
     )
     if win_temp is not None:
@@ -489,9 +393,12 @@ def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices
                         if 'heating_boiler_running' in changed_messages:
                             win_heating.update_boiler_running(changed_messages['heating_boiler_running'])
                     if win_spot_prices is not None and 'spot_prices_long' in changed_messages:
-                        current_spot_price, future_spot_prices = _resolve_spot_prices(changed_messages['spot_prices_long'])
-                        win_spot_prices.update_prices(current_spot_price, future_spot_prices)
+                        win_spot_prices.update_prices(changed_messages['spot_prices_long'])
                 time.sleep_ms(poll_sleep_ms)
+
+            #  try update spot prices after the loop, in case there were quater changes in the last loop, so that the display is updated with the latest prices
+            win_spot_prices.update_prices()
+
     # finally:
     #     client.disconnect()
 
@@ -551,8 +458,7 @@ def testing_windows(client, win_temp=None, win_heating=None, win_spot_prices=Non
         time.sleep(10)
     if win_spot_prices is not None:
         time.sleep(10)
-        current_spot_price, future_spot_prices = _resolve_spot_prices("yhdeksäs")
-        win_spot_prices.update_prices(-2.34, future_spot_prices)
+        win_spot_prices.update_prices({'2026-4-5': {'22': [0, 0, 0, 0], '23': [0, 0, 0, 0], '18': [0, 0, 0, 0], '19': [0, 1, 1, 0], '21': [0, 1, 0, 0], '20': [1, 1, 1, 1]}})
 
 
 if __name__=='__main__':
