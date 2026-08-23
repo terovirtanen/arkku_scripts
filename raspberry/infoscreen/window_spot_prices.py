@@ -1,6 +1,3 @@
-from turtle import update
-
-from raspberry.infoscreen.simple_test_with_screen import _build_spot_price_points
 from writer import Writer
 import font10_fi as fifont10
 import font20_fi as fifont20
@@ -137,6 +134,8 @@ class WindowSpotPrices(WindowBase):
         return (year, month, day, hour, quarter)
 
     def _build_spot_price_points(self):
+        config.debug_print('_resolve_spot_prices')
+
         if not isinstance(self.spot_prices_long, dict):
             return []
 
@@ -180,6 +179,7 @@ class WindowSpotPrices(WindowBase):
 
 # ('spot_prices_long', {'2026-4-5': {'22': [0, 0, 0, 0], '23': [0, 0, 0, 0], '18': [0, 0, 0, 0], '19': [0, 1, 1, 0], '21': [0, 1, 0, 0], '20': [1, 1, 1, 1]}})
     def _resolve_spot_prices(self):
+        config.debug_print('_resolve_spot_prices')
         points = self._build_spot_price_points()
         if not points:
             return (None, [])

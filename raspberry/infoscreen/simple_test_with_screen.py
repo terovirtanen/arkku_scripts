@@ -359,7 +359,7 @@ def init_windows_from_mqtt(client, win_temp=None, win_heating=None, win_spot_pri
             refresh=False,
         )
     if win_spot_prices is not None:
-        win_spot_prices.update_prices(current_spot_price, future_spot_prices, refresh=False)
+        win_spot_prices.update_prices(spot_prices_long, refresh=False)
 
 
 def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices=None, loops = 5, sleeptime_seconds = 10, poll_sleep_ms = 1000):
