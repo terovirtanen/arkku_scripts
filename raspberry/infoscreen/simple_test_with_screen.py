@@ -29,7 +29,6 @@
 
 
 from umqtt.simple import MQTTClient
-import ntptime
 import ubinascii
 import ujson
 import time
@@ -37,6 +36,7 @@ import network
 # own library
 import config
 import EPD_7in5_B
+import helsinki_time
 
 from window_heating import WindowHeating
 from window_spot_prices import WindowSpotPrices
@@ -292,47 +292,6 @@ def wlan_connect():
         sleep_or_deepsleep(30000) # sleep 30 seconds before retry
         raise
 
-def last_sunday(year, month):
-    days_in_month = 31
-    timestamp = time.mktime((year, month, days_in_month, 0, 0, 0, 0, 0))
-    weekday = time.localtime(timestamp)[6]  # Monday=0, Sunday=6
-    return days_in_month - ((weekday + 1) % 7)
-
-
-def helsinki_localtime():
-    utc_timestamp = time.time()
-    utc = time.localtime(utc_timestamp)
-    year = utc[0]
-
-    summer_time_start = time.mktime((
-        year,
-        3,
-        last_sunday(year, 3),
-        1, 0, 0, 0, 0
-    ))
-
-    summer_time_end = time.mktime((
-        year,
-        10,
-        last_sunday(year, 10),
-        1, 0, 0, 0, 0
-    ))
-
-    if summer_time_start <= utc_timestamp < summer_time_end:
-        offset_hours = 3
-    else:
-        offset_hours = 2
-
-    return time.localtime(utc_timestamp + offset_hours * 60 * 60)
-
-def sync_time_with_ntp():
-    try:
-        config.debug_print('Syncing RTC with NTP')
-        ntptime.settime()
-        config.debug_print('RTC synced: %s' % (time.localtime(),))
-    except OSError as error:
-        config.debug_print('NTP sync failed: %s' % error)
-
 
 def mqtt_connect_and_subscribe():
     mqtt_connection = MqttConnection(
@@ -400,7 +359,7 @@ def listen_for_messages(client, win_temp=None, win_heating=None, win_spot_prices
         # Listen for further changed values, polling often instead of one long sleep
         # per iteration so messages don't queue up and pings keep the connection alive
         for _ in range(loops):
-            config.debug_print('Time now: %s' % (helsinki_localtime(),))
+            config.debug_print('Time now: %s' % (helsinki_time.localtime(),))
             deadline = time.ticks_add(time.ticks_ms(), sleeptime_seconds * 1000)
             while time.ticks_diff(deadline, time.ticks_ms()) > 0:
                 client.check_msg()
@@ -497,7 +456,7 @@ def testing_windows(client, win_temp=None, win_heating=None, win_spot_prices=Non
 if __name__=='__main__':
     try:
         wlan = wlan_connect()
-        sync_time_with_ntp()
+        helsinki_time.sync_time_with_ntp()
         mqtt = mqtt_connect_and_subscribe()
         epd = init_epd()
 

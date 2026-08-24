@@ -4,6 +4,7 @@ import font20_fi as fifont20
 import time
 
 import config
+import helsinki_time
 from window_base import WindowBase
 
 
@@ -134,8 +135,6 @@ class WindowSpotPrices(WindowBase):
         return (year, month, day, hour, quarter)
 
     def _build_spot_price_points(self):
-        config.debug_print('_resolve_spot_prices')
-
         if not isinstance(self.spot_prices_long, dict):
             return []
 
@@ -184,7 +183,7 @@ class WindowSpotPrices(WindowBase):
         if not points:
             return (None, [])
 
-        now = time.localtime()
+        now = helsinki_time.localtime()
         current_marker = (now[0], now[1], now[2], now[3], now[4] // 15)
 
         current_price = None
