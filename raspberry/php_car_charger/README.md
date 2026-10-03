@@ -16,13 +16,13 @@ Lisää `car_charger`-tauluun (kanta `porssisahkonet`) latausjakson, joka alkaa 
 Oletus (1 h, 10 A):
 
 ```
-curl "http://<palvelin>/car_charger/start_now"
+curl -L "http://<palvelin>/car_charger/start_now"
 ```
 
 2 h teholatauksella (16 A):
 
 ```
-curl "http://<palvelin>/car_charger/start_now?hours=2&power_charging=true"
+curl -L "http://<palvelin>/car_charger/start_now?hours=2&power_charging=true"
 ```
 
 Vastaus:
@@ -45,4 +45,3 @@ Vastaus:
 
 1. Kopioi `.env.example` nimelle `.env` ja täytä tunnukset.
 2. Aja `./apache_setup.sh`.
-3. Apachessa tarvitaan `mod_rewrite` ja `AllowOverride All`.
