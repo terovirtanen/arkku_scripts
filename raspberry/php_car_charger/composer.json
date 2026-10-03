@@ -1,0 +1,10 @@
+{
+  "name": "terovirtanen/car_charger",
+  "description": "Car charger API",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.0",
+    "vlucas/phpdotenv": "^5.6"
+  }
+}
